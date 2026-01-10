@@ -1,0 +1,74 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id                      String                @id @default(cuid())
+  name                    String
+  profilePhoto            String?
+  birthDate               DateTime
+  gender                  String                // Gender: MALE, FEMALE, NON_BINARY
+  cpf                     String?
+  rg                      String?
+  religion                String                // Religion: ATHEIST, BUDDHISM, CANDOMBLE, CATHOLIC, SPIRITIST, SPIRITUALIST, EVANGELICAL, HINDUISM, ISLAM, JUDAISM, MORMON, NO_RELIGION, JEHOVAH_WITNESS, UMBANDA
+  legalGuardian           String?
+  legalGuardianEmail      String?
+  legalGuardianCpf        String?
+  phone1                  String
+  phone2                  String?
+  email                   String?
+  hasTherapyHistory       Boolean
+  therapyHistoryDetails   String?
+  takesMedication         Boolean
+  medicationSince         String?
+  medicationNames         String?
+  hasHospitalization      Boolean
+  hospitalizationDate     String?
+  hospitalizationReason   String?
+  consultationPrice       Decimal?
+  consultationFrequency   String?               // ConsultationFrequency: WEEKLY, BIWEEKLY, MONTHLY, SPORADIC
+  consultationDay         String?               // DayOfWeek: MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY
+  credits                 Int                   @default(0)
+  consultations           Consultation[]
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@index([name])
+  @@index([birthDate])
+  @@index([credits])
+  @@index([createdAt])
+  @@index([name, createdAt])
+}
+
+model Consultation {
+  id          String            @id @default(cuid())
+  patient     Patient           @relation(fields: [patientId], references: [id])
+  patientId   String
+  startedAt   DateTime          @default(now())
+  finishedAt  DateTime?
+  paidAt      DateTime?
+  status      String            @default("OPEN")  // ConsultationStatus: OPEN, FINALIZED
+  content     String            @default("")
+  notes       String            @default("")
+  price       Decimal
+  paid        Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([patientId])
+  @@index([status])
+  @@index([paid])
+  @@index([startedAt])
+  @@index([createdAt])
+  @@index([patientId, status])
+  @@index([status, startedAt])
+}
+
