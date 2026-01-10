@@ -7,19 +7,22 @@ inclusion: always
    Learn about inclusion modes: https://kiro.dev/docs/steering/#inclusion-modes
 -------------------------------------------------------------------------------------> 
 
-# Conventional Commits — Steering Guide
+# Conventional Commits & Conventional Branches — Steering Guide
 
-## 📌 Overview
-
-**Conventional Commits** is a lightweight specification for writing standardized commit messages. It creates a common convention that is both **human- and machine-readable**, enabling clearer commit history and better automation (e.g., versioning, CHANGELOG generation). ([conventionalcommits.org][1])
-
-This guide combines the *official specification* with practical insights from an engineering team on how to apply the pattern effectively.
+This document combines the **Conventional Commits specification** with **branch naming best practices** to help you maintain **clear, consistent, and automation-friendly** Git history and workflows.
 
 ---
 
-## 🧱 Commit Message Structure
+## 📌 Overview
 
-The basic structure of a Conventional Commit message is:
+**Conventional Commits** defines a structured format for commit messages that supports **semver versioning, automation, and readability**.
+**Conventional Branches** extends that structure to Git branch names, helping teams and tools identify the purpose of branches quickly. ([Conventional Branch][1])
+
+---
+
+## 🧱 Conventional Commit Messages
+
+### Structure
 
 ```
 <type>[optional scope]: <description>
@@ -29,149 +32,147 @@ The basic structure of a Conventional Commit message is:
 [optional footer(s)]
 ```
 
-* **type**: Defines the kind of change being committed.
-* **scope** (*optional*): A context or section of the codebase it affects.
-* **description**: A short imperative summary of the change.
-* **body** (*optional*): Additional explanatory text.
-* **footer(s)** (*optional*): Metadata like issue references or breaking changes. ([conventionalcommits.org][1])
+* `type`: Category of change (feat, fix, etc.).
+* `scope` (optional): Area of code affected.
+* `description`: Imperative summary.
+* `body`: Optional detailed explanation.
+* `footer`: Metadata (issues references, breaking changes).
 
 ---
 
-## 🔠 Commit Types
+### Common Types
 
-Commonly used types include:
-
-| Type       | Meaning                                               |
-| ---------- | ----------------------------------------------------- |
-| `feat`     | A new feature                                         |
-| `fix`      | A bug fix                                             |
-| `docs`     | Documentation only changes                            |
-| `style`    | Formatting, whitespace, or code style changes         |
-| `refactor` | Code changes that neither add a feature nor fix a bug |
-| `perf`     | A performance improvement                             |
-| `test`     | Adding or updating tests                              |
-| `ci`       | Changes to CI configuration                           |
-| `build`    | Changes that affect the build system or dependencies  |
-| `chore`    | Maintenance tasks / tooling updates                   |
-| `revert`   | Reverting a previous commit                           |
-
-> The specification **allows additional types** beyond these, if your team defines them. ([conventionalcommits.org][1])
-
-**Notes derived from real use:**
-
-* Only **one type per commit** is allowed.
-* If unsure which type fits best, consider splitting the work into multiple commits.
-* Teams often include custom types if needed (e.g., `business` for business-rule adjustments). ([Medium][2])
+| Type                   | Purpose                               |
+| ---------------------- | ------------------------------------- |
+| `feat`                 | New feature                           |
+| `fix`                  | Bug fix                               |
+| `docs`                 | Documentation                         |
+| `style`                | Formatting or stylistic changes       |
+| `refactor`             | Code modification without feature/fix |
+| `perf`                 | Performance improvements              |
+| `test`                 | Tests added or modified               |
+| `ci`                   | CI config changes                     |
+| `build`                | Build system / dependencies changes   |
+| `chore`                | Maintenance tasks                     |
+| `revert`               | Revert a previous commit              |
+| (*Extendable by team*) |                                       |
 
 ---
 
-## 🔍 Scopes
+### Best Practices for Messages
 
-Scopes provide extra detail about where the change occurred:
-
-* Written inside parentheses after the type (e.g., `feat(parser): ...`).
-* They help describe **what part of the codebase** the commit touches.
-* Multiple scopes can be used if the change affects several areas. ([Medium][2])
-
----
-
-## ✨ Description Style
-
-The description (subject) should be:
-
-* **Brief** — summarize in imperative voice.
-* In the **imperative mood** (e.g., “add feature”, not “added feature”).
-* Based on the idea:
-
-  > *“If applied, this commit will…”*
-  > This makes commit intent clearer to humans and tools. ([Medium][2])
+1. **Use imperative mood**: e.g., *“add login”*, not *“added login”*.
+2. **Include a scope when meaningful**: improves context.
+3. **Keep description concise** (≤72 characters).
+4. **Use body for motivation/impact**.
+5. **Use footer for breaking changes and ticket refs**.
 
 ---
 
-## ⚠️ Breaking Changes
+## 🌿 Conventional Branch Naming
 
-A commit introduces a breaking change when:
+Standardizing branch names improves readability, tooling integration (CI/CD workflows), and collaboration. ([Conventional Branch][1])
 
-1. The commit header includes a `!`:
-
-   ```
-   feat!: change API behavior
-   ```
-2. It uses a footer with `BREAKING CHANGE: …`
-
-Breaking changes should correlate with a **MAJOR** version bump in semantic versioning. ([conventionalcommits.org][1])
-
----
-
-## 🧠 Semantic Versioning (SemVer)
-
-The Conventional Commits specification connects to SemVer:
-
-| Commit Type/Indicator | Version Impact |
-| --------------------- | -------------- |
-| `fix`                 | PATCH          |
-| `feat`                | MINOR          |
-| `BREAKING CHANGE`     | MAJOR          |
-
-This linkage allows version bump automation based purely on commit content. ([conventionalcommits.org][1])
-
----
-
-## 📋 Practical Benefits
-
-Using Conventional Commits helps with:
-
-* **Automating changelog generation**
-* **Inferring version bumps**
-* **Improved transparency for collaborators**
-* **Better CI/CD triggers and tooling**
-* **Easier onboarding and history exploration** ([conventionalcommits.org][3])
-
----
-
-## 🛠 Adoption Tips
-
-* Use commit linters or tools (like *commitlint*) to enforce the standard in CI. ([Medium][2])
-* Educate your team on the rule set and why it matters.
-* Customize commit types and workflows only if aligned with team goals.
-* Consider automated tooling that reads commit history for release automation.
-
----
-
-## 📚 Examples
-
-### Standard commit
+### Naming Format
 
 ```
-feat(parser): add support for bracket syntax
+<type>/<description>
 ```
 
-### With scope and breaking change
+### Common Prefix Types
+
+| Prefix                                                    | Purpose                   |
+| --------------------------------------------------------- | ------------------------- |
+| `main`                                                    | Base code branch          |
+| `feature/`                                                | New features              |
+| `bugfix/` or `fix/`                                       | Bug fixes                 |
+| `hotfix/`                                                 | Critical production fixes |
+| `release/`                                                | Release preparation       |
+| `chore/`                                                  | Maintenance tasks         |
+| (*Teams may extend if needed*) ([Conventional Branch][1]) |                           |
+
+---
+
+### Basic Rules
+
+1. **Lowercase only** — avoid uppercase; Git branch search is case-sensitive. ([DEV Community][2])
+2. **Use hyphens (`-`) to separate words.**
+3. **No consecutive or trailing hyphens or dots.** ([Conventional Branch][1])
+4. **Clear and concise descriptions** that signal intent. ([Conventional Branch][1])
+5. **Include issue/ticket numbers** (if applicable) for traceability. ([Conventional Branch][1])
+
+**Examples**
 
 ```
-feat(parser)!: remove deprecated parse API
-
-BREAKING CHANGE: The previous parse API has been removed.
-```
-
-### With body and footer
-
-```
-fix(cache): resolve stale cache invalidation issue
-
-The cache did not correctly refresh when TTL expired.
-Refs #321
-Reviewed-by: @alice
+feature/user-authentication
+bugfix/issue-234-fix-login-error
+hotfix/critical-security-patch
+release/v1.2.0
+chore/update-dependencies
 ```
 
 ---
 
-## 🧩 Summary of Best Practices
+## 🧠 Branching Best Practices
 
-* Follow the **structure strictly** for predictable history.
-* Use **imperative language** in commit subjects.
-* Prefer **single logical change per commit**.
-* Use **scopes** for context in larger codebases.
-* Track **breaking changes clearly** for automation.
+### 🎯 Branch Creation
+
+* **Branch off from latest `main` or stable base** to reduce merge conflicts.
+* **Keep branches focused on a single task** (feature, fix, chore).
+* **Delete merged branches** to avoid clutter. ([docs.tuturuuu.com][3])
+
+---
+
+### 📌 Naming Clarity
+
+* Use **purpose-first prefixes** (e.g., `feature/`, `bugfix/`).
+* **Avoid vague names** like `new`, `update`, or `work`.
+* Include **ticket identifiers** when using issue trackers.
+* Avoid embedding developer names; branches should represent *work, not person*. ([Conventional Branch][1])
+
+---
+
+### 🔁 Workflow Considerations
+
+* **Short-lived branches** are healthier than long-lived ones:
+  they reduce conflicts and keep integration frequent.
+* **Rename branches** if the scope significantly changes (but coordinate with the team).
+* Use **CI enforcement (hooks/lint)** to validate branch names consistently. ([theadnanlab.com][4])
+
+---
+
+## 🔄 Integrating Commits & Branches
+
+Aligning conventional commits with branch names increases clarity:
+
+* Branch `feature/login` → commits like `feat(login): …`.
+* Branch `bugfix/234-fix-header` → commits like `fix(header): …`.
+
+This **mapping enhances traceability** and improves automated release tools.
+
+---
+
+## 🛠 Automation & Tooling
+
+Use automated tools to enforce conventions:
+
+* **Commit message linters** (e.g., `commitlint`).
+* **Branch name validators** (e.g., Git hooks, CI scripts).
+* **Semantic release tools** that parse commit history for versioning.
+
+Conventions make automation reliable and predictable.
+
+---
+
+## 📚 Summary
+
+Following Conventional Commits and Conventional Branches ensures:
+
+* **Consistent commit and branch history**.
+* **Improved readability and collaboration**.
+* **Better tooling support** (automated versioning, changelogs, CI).
+* **Related semantic context** between code changes and branches.
+
+By adopting and enforcing these conventions, teams build a **clear, cohesive, and maintainable workflow**.
 
 ---

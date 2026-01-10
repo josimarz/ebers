@@ -215,6 +215,27 @@ export async function getPatientFinancialData(patientId: string): Promise<Patien
 }
 
 /**
+ * Gets total revenue from paid consultations
+ */
+export async function getTotalRevenue(): Promise<number> {
+  try {
+    const result = await prisma.consultation.aggregate({
+      _sum: {
+        price: true
+      },
+      where: {
+        paid: true
+      }
+    })
+
+    return Number(result._sum.price || 0)
+  } catch (error) {
+    console.error('Error calculating total revenue:', error)
+    throw new Error('Erro ao calcular receita total')
+  }
+}
+
+/**
  * Gets financial statistics for dashboard
  */
 export async function getFinancialStats(): Promise<{

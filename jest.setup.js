@@ -29,6 +29,8 @@ jest.mock('@prisma/client', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
+      aggregate: jest.fn(),
     },
     consultation: {
       create: jest.fn(),
@@ -36,6 +38,8 @@ jest.mock('@prisma/client', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
+      aggregate: jest.fn(),
     },
     $disconnect: jest.fn(),
   })),

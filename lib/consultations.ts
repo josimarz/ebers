@@ -492,6 +492,33 @@ export async function processConsultationPayment(id: string): Promise<Consultati
 }
 
 /**
+ * Gets recent consultations for dashboard
+ */
+export async function getRecentConsultations(limit: number = 3): Promise<ConsultationWithPatient[]> {
+  try {
+    const consultations = await prisma.consultation.findMany({
+      take: limit,
+      orderBy: { startedAt: 'desc' },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            profilePhoto: true,
+            birthDate: true
+          }
+        }
+      }
+    })
+
+    return consultations.map(addAgeToConsultationPatient)
+  } catch (error) {
+    console.error('Error fetching recent consultations:', error)
+    throw new Error('Erro ao buscar consultas recentes')
+  }
+}
+
+/**
  * Gets consultation statistics for dashboard
  */
 export async function getConsultationStats(): Promise<{

@@ -377,6 +377,29 @@ export async function searchPatients(query: string, limit: number = 10): Promise
 }
 
 /**
+ * Gets recent patients for dashboard
+ */
+export async function getRecentPatients(limit: number = 3): Promise<PatientWithAge[]> {
+  try {
+    const patients = await prisma.patient.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        consultations: {
+          orderBy: { createdAt: 'desc' },
+          take: 1 // Get latest consultation for status checking
+        }
+      }
+    })
+
+    return patients.map(addAgeToPatient)
+  } catch (error) {
+    console.error('Error fetching recent patients:', error)
+    throw new Error('Erro ao buscar pacientes recentes')
+  }
+}
+
+/**
  * Gets patient statistics for dashboard
  */
 export async function getPatientStats(): Promise<{
