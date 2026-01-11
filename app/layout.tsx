@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { ToastProvider } from '@/lib/toast-context'
 import { ToastContainer } from '@/components/ui/Toast'
+import { NetworkInfo } from '@/components/NetworkInfo'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -27,6 +28,7 @@ export default function RootLayout({
               {children}
             </AppLayout>
             <ToastContainer />
+            <NetworkInfo />
           </ErrorBoundary>
         </ToastProvider>
       </body>

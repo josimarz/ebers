@@ -2,9 +2,44 @@
 
 Sistema para gerenciamento de pacientes e consultas de psicologia.
 
-## Tecnologias
+## 🖥️ Aplicação Desktop
+
+Este sistema pode ser executado como uma **aplicação desktop** usando Electron, permitindo:
+
+- ✅ Execução local sem necessidade de servidor externo
+- ✅ Banco de dados SQLite armazenado localmente
+- ✅ Acesso via rede local para iPads
+- ✅ Distribuição como aplicativo nativo (macOS, Windows, Linux)
+
+### Executar como Desktop
+
+```bash
+# Desenvolvimento
+npm run electron:dev
+
+# Produção
+npm run electron:build
+npm run electron
+```
+
+### Gerar Distribuíveis
+
+```bash
+# Todas as plataformas
+npm run dist
+
+# Plataforma específica
+npm run dist:mac    # macOS
+npm run dist:win    # Windows  
+npm run dist:linux  # Linux
+```
+
+📖 **[Ver documentação completa do Electron](docs/ELECTRON.md)**
+
+## 🌐 Tecnologias
 
 - **Next.js 16.1.1** com App Router
+- **Electron** para aplicação desktop
 - **TypeScript** para type safety
 - **Tailwind CSS 4.1** para estilização
 - **Prisma ORM** com SQLite
@@ -84,7 +119,7 @@ prisma/               # Configuração do Prisma
 └── schema.prisma     # Schema do banco de dados
 ```
 
-## Funcionalidades
+## 🚀 Funcionalidades
 
 - ✅ Gerenciamento de pacientes
 - ✅ Auto-cadastro via iPad
@@ -92,3 +127,24 @@ prisma/               # Configuração do Prisma
 - ✅ Controle de créditos
 - ✅ Controle financeiro
 - ✅ Interface responsiva
+- ✅ **Aplicação desktop com Electron**
+- ✅ **Acesso via rede local**
+- ✅ **Banco de dados local e privado**
+
+## 📱 Uso com iPad
+
+O sistema detecta automaticamente dispositivos iPad e:
+
+1. Redireciona para a página de cadastro de paciente
+2. Oculta campos administrativos
+3. Permite auto-cadastro pelos pacientes
+4. Impede navegação para áreas restritas
+
+## 🗄️ Banco de Dados
+
+- **SQLite** armazenado localmente
+- **Localização automática** na pasta de dados do usuário:
+  - macOS: `~/Library/Application Support/Ebers/`
+  - Windows: `%APPDATA%/Ebers/`
+  - Linux: `~/.config/Ebers/`
+- **Inicialização automática** na primeira execução
