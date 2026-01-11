@@ -198,6 +198,57 @@ electron_1.ipcMain.handle('show-info-dialog', async (_event, message) => {
         });
     }
 });
+// Handler para seleção de pasta para backup
+electron_1.ipcMain.handle('select-folder', async () => {
+    if (mainWindow) {
+        const result = await electron_1.dialog.showOpenDialog(mainWindow, {
+            properties: ['openDirectory'],
+            title: 'Selecionar pasta para backup',
+        });
+        if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+            return {
+                canceled: false,
+                filePath: result.filePaths[0],
+            };
+        }
+        return { canceled: true };
+    }
+    return { canceled: true };
+});
+// Handler para criação de backup
+electron_1.ipcMain.handle('create-backup', async (_event, destinationPath) => {
+    try {
+        // Verificar se o arquivo do banco existe
+        if (!(0, fs_1.existsSync)(DATABASE_PATH)) {
+            return {
+                success: false,
+                error: 'Arquivo do banco de dados não encontrado',
+            };
+        }
+        // Gerar nome do arquivo de backup com timestamp
+        const now = new Date();
+        const timestamp = now.toISOString()
+            .replace(/[-:]/g, '')
+            .replace(/\..+/, '')
+            .replace('T', 'T');
+        const backupFileName = `ebers-${timestamp}.db`;
+        const backupPath = (0, path_1.join)(destinationPath, backupFileName);
+        // Copiar o arquivo do banco para o destino
+        (0, fs_1.copyFileSync)(DATABASE_PATH, backupPath);
+        return {
+            success: true,
+            fileName: backupFileName,
+            filePath: backupPath,
+        };
+    }
+    catch (error) {
+        console.error('Erro ao criar backup:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Erro desconhecido',
+        };
+    }
+});
 electron_1.app.whenReady().then(async () => {
     try {
         // Configurações específicas para macOS

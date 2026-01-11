@@ -8,8 +8,17 @@ import {
   DollarSign, 
   Home,
   UserPlus,
-  Stethoscope
+  Database
 } from 'lucide-react';
+
+// Componente personalizado para o símbolo PSY (Ψ) da psicologia
+const PsyIcon = ({ className }: { className?: string }) => (
+  <div className={`flex items-center justify-center ${className}`}>
+    <span className="text-xl font-bold leading-none" style={{ fontFamily: 'serif' }}>
+      Ψ
+    </span>
+  </div>
+);
 
 const navigation = [
   {
@@ -38,18 +47,23 @@ const navigation = [
     href: '/financial',
     icon: DollarSign,
   },
+  {
+    name: 'Backup',
+    href: '/backup',
+    icon: Database,
+  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full w-64 flex-col bg-primary bg-gradient-to-b from-primary-500 to-secondary-500 shadow-2xl">
+    <div className="flex h-full w-64 flex-col bg-gradient-to-b from-primary-500 to-secondary-500 shadow-2xl">
       {/* Logo/Brand */}
       <div className="flex h-16 items-center justify-center border-b border-white/20 bg-black/10">
         <div className="flex items-center space-x-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 backdrop-blur-sm">
-            <Stethoscope className="h-5 w-5 text-white" />
+            <PsyIcon className="text-white" />
           </div>
           <h1 className="text-xl font-bold text-white">Ebers</h1>
         </div>

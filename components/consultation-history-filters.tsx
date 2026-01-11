@@ -196,7 +196,7 @@ export function ConsultationHistoryFilters({
       {selectedPatient && (
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Filtros ativos:</span>
-          <div className="flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
+          <div className="flex items-center gap-1 px-3 py-1 bg-primary-500/10 text-primary-500 rounded-full text-sm">
             <span>Paciente: {selectedPatient.name}</span>
             <button
               onClick={handleClearPatient}
