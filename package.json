@@ -18,10 +18,11 @@
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "node scripts/build-electron.js",
     "build:electron": "tsc --project electron/tsconfig.json",
-    "dist": "npm run build && npm run build:electron && electron-builder",
-    "dist:mac": "npm run build && npm run build:electron && electron-builder --mac",
-    "dist:win": "npm run build && npm run build:electron && electron-builder --win",
-    "dist:linux": "npm run build && npm run build:electron && electron-builder --linux"
+    "generate:icons": "node scripts/generate-icons.js && node scripts/generate-favicon.js",
+    "dist": "npm run generate:icons && npm run build && npm run build:electron && electron-builder",
+    "dist:mac": "npm run generate:icons && npm run build && npm run build:electron && electron-builder --mac",
+    "dist:win": "npm run generate:icons && npm run build && npm run build:electron && electron-builder --win",
+    "dist:linux": "npm run generate:icons && npm run build && npm run build:electron && electron-builder --linux"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -59,6 +60,7 @@
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.5.6",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.7.2",
     "wait-on": "^8.0.1"
@@ -79,6 +81,7 @@
     ],
     "mac": {
       "category": "public.app-category.medical",
+      "icon": "public/icons/icon-for-icns.png",
       "target": [
         {
           "target": "dmg",
@@ -90,9 +93,11 @@
       ]
     },
     "win": {
+      "icon": "public/icons/icon-for-ico.png",
       "target": "nsis"
     },
     "linux": {
+      "icon": "public/icons/icon.png",
       "target": "AppImage"
     }
   }

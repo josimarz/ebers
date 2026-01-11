@@ -44,11 +44,17 @@ let nextServer: any = null;
 const createWindow = async () => {
   console.log('Creating main window...');
   
+  // Definir o caminho do ícone baseado no ambiente
+  const iconPath = isDev 
+    ? join(__dirname, '..', 'public', 'icons', 'icon.png')
+    : join(process.resourcesPath, 'app', 'public', 'icons', 'icon.png');
+  
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
