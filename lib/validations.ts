@@ -83,7 +83,13 @@ const SanitizedUrl = z.string().transform(sanitizeUrl).pipe(z.string().url('URL 
 
 // Utility validation schemas
 const NonEmptyString = z.string().min(1, 'Campo obrigatório').transform(sanitizeText)
-const OptionalEmail = z.string().transform(sanitizeEmail).pipe(z.string().email('Email inválido')).optional().or(z.literal(''))
+const OptionalEmail = z.preprocess(
+  (val) => {
+    if (val === null || val === undefined || val === '') return undefined
+    return val
+  },
+  z.string().transform(sanitizeEmail).pipe(z.string().email('Email inválido')).optional()
+)
 const PositiveNumber = z.number().positive('Valor deve ser positivo')
 const NonNegativeInteger = z.number().int().min(0, 'Valor não pode ser negativo')
 
@@ -119,7 +125,10 @@ export const PatientSchema = z.object({
   hasHospitalization: z.boolean(),
 
   // Optional fields (Requirements 1.2)
-  profilePhoto: z.string().transform(sanitizeUrl).pipe(z.string().url('URL inválida')).optional(),
+  profilePhoto: z.string().transform(sanitizeUrl).refine(
+    (val) => !val || val.startsWith('data:image/') || val.startsWith('http://') || val.startsWith('https://'),
+    'URL da foto inválida'
+  ).optional(),
   cpf: z.string().max(14, 'CPF muito longo').transform(sanitizeDocument).optional(),
   rg: z.string().max(20, 'RG muito longo').transform(sanitizeDocument).optional(),
   legalGuardian: z.string().max(255, 'Nome do responsável muito longo').transform(sanitizeName).optional(),
@@ -177,7 +186,10 @@ export const PatientIpadSchema = z.object({
   hasHospitalization: z.boolean(),
 
   // Optional fields (Requirements 1.2) - excluding iPad-restricted fields
-  profilePhoto: z.string().transform(sanitizeUrl).pipe(z.string().url('URL inválida')).optional(),
+  profilePhoto: z.string().transform(sanitizeUrl).refine(
+    (val) => !val || val.startsWith('data:image/') || val.startsWith('http://') || val.startsWith('https://'),
+    'URL da foto inválida'
+  ).optional(),
   cpf: z.string().max(14, 'CPF muito longo').transform(sanitizeDocument).optional(),
   rg: z.string().max(20, 'RG muito longo').transform(sanitizeDocument).optional(),
   legalGuardian: z.string().max(255, 'Nome do responsável muito longo').transform(sanitizeName).optional(),
@@ -251,34 +263,41 @@ export const CreditSalesSchema = z.object({
 // Patient update schema (for partial updates)
 export const PatientUpdateSchema = z.object({
   id: NonEmptyString,
-  // All fields from PatientSchema but optional
+  // All fields from PatientSchema but optional - accept null from database
   name: z.string().min(1, 'Nome é obrigatório').max(255, 'Nome muito longo').optional(),
-  birthDate: z.date({
-    invalid_type_error: 'Data de nascimento inválida'
-  }).optional(),
+  birthDate: z.union([z.date(), z.string().transform(str => new Date(str))]).optional(),
   gender: GenderEnum.optional(),
   religion: ReligionEnum.optional(),
   phone1: z.string().min(1, 'Telefone é obrigatório').max(20, 'Telefone muito longo').optional(),
   hasTherapyHistory: z.boolean().optional(),
   takesMedication: z.boolean().optional(),
   hasHospitalization: z.boolean().optional(),
-  profilePhoto: z.string().url('URL da foto inválida').optional(),
-  cpf: z.string().max(14, 'CPF muito longo').optional(),
-  rg: z.string().max(20, 'RG muito longo').optional(),
-  legalGuardian: z.string().max(255, 'Nome do responsável muito longo').optional(),
-  legalGuardianEmail: OptionalEmail,
-  legalGuardianCpf: z.string().max(14, 'CPF do responsável muito longo').optional(),
-  phone2: z.string().max(20, 'Telefone muito longo').optional(),
-  email: OptionalEmail,
-  therapyHistoryDetails: z.string().max(1000, 'Detalhes muito longos').optional(),
-  medicationSince: z.string().max(100, 'Texto muito longo').optional(),
-  medicationNames: z.string().max(500, 'Lista de medicamentos muito longa').optional(),
-  hospitalizationDate: z.string().max(100, 'Data muito longa').optional(),
-  hospitalizationReason: z.string().max(500, 'Razão muito longa').optional(),
-  consultationPrice: z.number().positive('Valor deve ser positivo').max(99999.99, 'Valor muito alto').optional(),
-  consultationFrequency: ConsultationFrequencyEnum.optional(),
-  consultationDay: DayOfWeekEnum.optional(),
+  profilePhoto: z.string().nullable().optional(),
+  cpf: z.string().max(14, 'CPF muito longo').nullable().optional(),
+  rg: z.string().max(20, 'RG muito longo').nullable().optional(),
+  legalGuardian: z.string().max(255, 'Nome do responsável muito longo').nullable().optional(),
+  legalGuardianEmail: z.string().email('Email inválido').nullable().optional(),
+  legalGuardianCpf: z.string().max(14, 'CPF do responsável muito longo').nullable().optional(),
+  phone2: z.string().max(20, 'Telefone muito longo').nullable().optional(),
+  email: z.string().email('Email inválido').nullable().optional(),
+  therapyHistoryDetails: z.string().max(1000, 'Detalhes muito longos').nullable().optional(),
+  medicationSince: z.string().max(100, 'Texto muito longo').nullable().optional(),
+  medicationNames: z.string().max(500, 'Lista de medicamentos muito longa').nullable().optional(),
+  hospitalizationDate: z.string().max(100, 'Data muito longa').nullable().optional(),
+  hospitalizationReason: z.string().max(500, 'Razão muito longa').nullable().optional(),
+  consultationPrice: z.number().positive('Valor deve ser positivo').max(99999.99, 'Valor muito alto').nullable().optional(),
+  consultationFrequency: ConsultationFrequencyEnum.nullable().optional(),
+  consultationDay: DayOfWeekEnum.nullable().optional(),
   credits: z.number().int().min(0, 'Valor não pode ser negativo').optional()
+}).transform((data) => {
+  // Convert null values to undefined for cleaner handling
+  const cleaned: Record<string, unknown> = { id: data.id };
+  for (const [key, value] of Object.entries(data)) {
+    if (key !== 'id' && value !== null && value !== undefined && value !== '') {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
 })
 
 // Consultation update schema (for partial updates)
@@ -375,8 +394,10 @@ export function formatValidationErrors(error: z.ZodError): Record<string, string
       } else {
         message = 'Campo obrigatório'
       }
-    } else if (message.includes('Invalid date') || message === 'Data de nascimento inválida' || message.includes('Invalid input')) {
+    } else if (path === 'birthDate' && (message.includes('Invalid date') || message === 'Data de nascimento inválida' || message.includes('Invalid input'))) {
       message = 'Data inválida'
+    } else if ((path === 'email' || path === 'legalGuardianEmail') && (message.includes('Invalid') || message.includes('email'))) {
+      message = 'Email inválido'
     } else if (message.includes('Required') || message === 'Campo obrigatório') {
       message = 'Campo obrigatório'
     } else if (message.includes('String must contain at least')) {

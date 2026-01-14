@@ -1,6 +1,5 @@
 const { execSync } = require('child_process');
-const { copyFileSync, existsSync, mkdirSync } = require('fs');
-const { join } = require('path');
+const { existsSync, mkdirSync } = require('fs');
 
 console.log('🔨 Building Electron application...');
 
@@ -24,16 +23,6 @@ try {
   // Copy database.js if it doesn't exist in compiled output
   if (existsSync('electron/database.js')) {
     console.log('✅ Database module already exists');
-  }
-
-  // Copy Prisma schema
-  if (!existsSync('electron/prisma')) {
-    mkdirSync('electron/prisma', { recursive: true });
-  }
-  
-  if (existsSync('prisma/schema.prisma')) {
-    copyFileSync('prisma/schema.prisma', 'electron/prisma/schema.prisma');
-    console.log('✅ Copied Prisma schema');
   }
 
   console.log('✅ Electron build completed successfully!');

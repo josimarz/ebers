@@ -43,15 +43,9 @@ module.exports = {
       'electron/**/*',
       '.next/**/*',
       'public/**/*',
-      'prisma/**/*',
+      'lib/db/**/*',
       'node_modules/**/*',
       'package.json',
-    ],
-    extraFiles: [
-      {
-        from: 'prisma/schema.prisma',
-        to: 'prisma/schema.prisma',
-      },
     ],
   },
 };

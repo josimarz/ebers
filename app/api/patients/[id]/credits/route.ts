@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { eq } from 'drizzle-orm'
+import { getDbAsync, patients, saveDatabase } from '@/lib/db'
 import { validateCreditSales, calculateCreditSalesTotal } from '@/lib/validations'
 
 /**
  * POST /api/patients/[id]/credits - Sell credits to a patient
- * Requirements: 4.1, 4.2, 4.3, 4.4
  */
 export async function POST(
   request: NextRequest,
@@ -22,7 +22,6 @@ export async function POST(
 
     const body = await request.json()
     
-    // Validate credit sales data
     const validation = validateCreditSales({
       patientId,
       quantity: body.quantity,
@@ -44,16 +43,18 @@ export async function POST(
 
     const { quantity, unitPrice } = validation.data
 
-    // Get patient and verify consultation price
-    const patient = await prisma.patient.findUnique({
-      where: { id: patientId },
-      select: {
-        id: true,
-        name: true,
-        consultationPrice: true,
-        credits: true
-      }
-    })
+    const db = await getDbAsync()
+
+    const patient = db
+      .select({
+        id: patients.id,
+        name: patients.name,
+        consultationPrice: patients.consultationPrice,
+        credits: patients.credits
+      })
+      .from(patients)
+      .where(eq(patients.id, patientId))
+      .get()
 
     if (!patient) {
       return NextResponse.json(
@@ -62,51 +63,53 @@ export async function POST(
       )
     }
 
-    // Verify patient has consultation price established (Requirement 4.5)
-    if (!patient.consultationPrice || Number(patient.consultationPrice) <= 0) {
+    if (!patient.consultationPrice || patient.consultationPrice <= 0) {
       return NextResponse.json(
         { error: 'Não é possível vender créditos. Valor da consulta não foi estabelecido.' },
         { status: 400 }
       )
     }
 
-    // Verify unit price matches patient's consultation price
-    if (Math.abs(Number(patient.consultationPrice) - unitPrice) > 0.01) {
+    if (Math.abs(patient.consultationPrice - unitPrice) > 0.01) {
       return NextResponse.json(
         { error: 'Preço unitário deve corresponder ao valor da consulta do paciente' },
         { status: 400 }
       )
     }
 
-    // Calculate total cost (Requirement 4.3)
     const totalCost = calculateCreditSalesTotal(quantity, unitPrice)
 
-    // Update patient credits (Requirement 4.4)
-    const updatedPatient = await prisma.patient.update({
-      where: { id: patientId },
-      data: {
-        credits: {
-          increment: quantity
-        }
-      },
-      select: {
-        id: true,
-        name: true,
-        credits: true,
-        consultationPrice: true
-      }
-    })
+    db.update(patients)
+      .set({ 
+        credits: patient.credits + quantity,
+        updatedAt: new Date()
+      })
+      .where(eq(patients.id, patientId))
+      .run()
+
+    saveDatabase()
+
+    const updatedPatient = db
+      .select({
+        id: patients.id,
+        name: patients.name,
+        credits: patients.credits,
+        consultationPrice: patients.consultationPrice
+      })
+      .from(patients)
+      .where(eq(patients.id, patientId))
+      .get()
 
     return NextResponse.json({
       success: true,
       message: `${quantity} crédito${quantity > 1 ? 's' : ''} vendido${quantity > 1 ? 's' : ''} com sucesso`,
       data: {
-        patientId: updatedPatient.id,
-        patientName: updatedPatient.name,
+        patientId: updatedPatient!.id,
+        patientName: updatedPatient!.name,
         creditsSold: quantity,
         unitPrice,
         totalCost,
-        newCreditBalance: updatedPatient.credits
+        newCreditBalance: updatedPatient!.credits
       }
     })
 

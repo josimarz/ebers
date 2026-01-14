@@ -42,7 +42,7 @@ npm run dist:linux  # Linux
 - **Electron** para aplicação desktop
 - **TypeScript** para type safety
 - **Tailwind CSS 4.1** para estilização
-- **Prisma ORM** com SQLite
+- **Drizzle ORM** com SQLite (better-sqlite3)
 - **Jest** e **React Testing Library** para testes
 - **fast-check** para property-based testing
 
@@ -62,8 +62,7 @@ npm install
 ### Configuração do banco de dados
 
 ```bash
-npx prisma generate
-npx prisma db push
+npm run db:init
 ```
 
 ### Executar em desenvolvimento
@@ -110,13 +109,13 @@ components/            # Componentes React
 └── consultation/     # Componentes de consulta
 
 lib/                  # Utilitários e configurações
-├── prisma.ts         # Cliente Prisma
+├── db/               # Drizzle ORM e schema
+│   ├── index.ts      # Conexão do banco
+│   ├── schema.ts     # Schema do banco
+│   └── migrate.ts    # Migrations
 ├── validations.ts    # Schemas de validação
 ├── utils.ts          # Funções utilitárias
 └── device-detection.ts # Detecção de dispositivos
-
-prisma/               # Configuração do Prisma
-└── schema.prisma     # Schema do banco de dados
 ```
 
 ## 🚀 Funcionalidades

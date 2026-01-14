@@ -180,6 +180,11 @@ export function sanitizeUrl(url: string): string {
 
   const trimmedUrl = url.trim()
   
+  // Allow data URLs for images (base64 encoded)
+  if (trimmedUrl.match(/^data:image\/(jpeg|jpg|png|gif|webp|svg\+xml);base64,/i)) {
+    return trimmedUrl
+  }
+  
   // Only allow http and https protocols
   if (!trimmedUrl.match(/^https?:\/\//i)) {
     return ''

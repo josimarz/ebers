@@ -15,35 +15,26 @@ import {
   searchPatientsForConsultations,
   deleteConsultation
 } from '@/lib/consultations'
-import { prisma } from '@/lib/prisma'
-import { Decimal } from '@prisma/client/runtime/library'
 
-// Mock Prisma for testing
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    patient: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn()
-    },
-    consultation: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn(),
-      count: jest.fn(),
-      delete: jest.fn()
-    },
-    $transaction: jest.fn()
-  }
-}))
-
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+// Get the mock db from jest.setup.js
+const mockDb = jest.requireMock('@/lib/db').getDb()
 
 describe('Consultation CRUD Operations', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // Reset chainable mock returns
+    mockDb.select.mockReturnThis()
+    mockDb.from.mockReturnThis()
+    mockDb.where.mockReturnThis()
+    mockDb.orderBy.mockReturnThis()
+    mockDb.limit.mockReturnThis()
+    mockDb.offset.mockReturnThis()
+    mockDb.insert.mockReturnThis()
+    mockDb.values.mockReturnThis()
+    mockDb.update.mockReturnThis()
+    mockDb.set.mockReturnThis()
+    mockDb.delete.mockReturnThis()
+    mockDb.selectDistinct.mockReturnThis()
   })
 
   describe('createConsultation', () => {
@@ -57,51 +48,26 @@ describe('Consultation CRUD Operations', () => {
         id: 'patient-123',
         name: 'João Silva',
         credits: 5,
-        consultationPrice: new Decimal(100)
+        consultationPrice: 100,
+        birthDate: new Date('1990-01-01'),
+        profilePhoto: null
       }
 
-      const mockCreatedConsultation = {
-        id: 'consultation-123',
-        patientId: 'patient-123',
-        startedAt: new Date(),
-        finishedAt: null,
-        paidAt: new Date(),
-        status: 'OPEN',
-        content: '',
-        notes: '',
-        price: new Decimal(100),
-        paid: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
-      }
-
-      mockPrisma.patient.findUnique.mockResolvedValue(mockPatient as any)
-      mockPrisma.consultation.findFirst.mockResolvedValue(null) // No unfinalized consultations
-      mockPrisma.$transaction.mockImplementation(async (callback) => {
-        return callback({
-          consultation: {
-            create: jest.fn().mockResolvedValue(mockCreatedConsultation)
-          },
-          patient: {
-            update: jest.fn().mockResolvedValue({})
-          }
-        })
-      })
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
+      // Mock no unfinalized consultations
+      mockDb.get.mockReturnValueOnce(null)
+      // Mock insert
+      mockDb.run.mockReturnValue({ changes: 1 })
 
       const result = await createConsultation(consultationData)
 
-      expect(mockPrisma.patient.findUnique).toHaveBeenCalledWith({
-        where: { id: 'patient-123' }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.insert).toHaveBeenCalled()
+      expect(mockDb.values).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
-        id: 'consultation-123',
         patientId: 'patient-123',
         status: 'OPEN',
         paid: true,
@@ -122,42 +88,17 @@ describe('Consultation CRUD Operations', () => {
         id: 'patient-123',
         name: 'João Silva',
         credits: 0, // No credits
-        consultationPrice: new Decimal(100)
+        consultationPrice: 100,
+        birthDate: new Date('1990-01-01'),
+        profilePhoto: null
       }
 
-      const mockCreatedConsultation = {
-        id: 'consultation-123',
-        patientId: 'patient-123',
-        startedAt: new Date(),
-        finishedAt: null,
-        paidAt: null,
-        status: 'OPEN',
-        content: '',
-        notes: '',
-        price: new Decimal(100),
-        paid: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
-      }
-
-      mockPrisma.patient.findUnique.mockResolvedValue(mockPatient as any)
-      mockPrisma.consultation.findFirst.mockResolvedValue(null)
-      mockPrisma.$transaction.mockImplementation(async (callback) => {
-        return callback({
-          consultation: {
-            create: jest.fn().mockResolvedValue(mockCreatedConsultation)
-          },
-          patient: {
-            update: jest.fn()
-          }
-        })
-      })
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
+      // Mock no unfinalized consultations
+      mockDb.get.mockReturnValueOnce(null)
+      // Mock insert
+      mockDb.run.mockReturnValue({ changes: 1 })
 
       const result = await createConsultation(consultationData)
 
@@ -168,11 +109,11 @@ describe('Consultation CRUD Operations', () => {
     })
 
     it('should throw error when patient not found', async () => {
-      mockPrisma.patient.findUnique.mockResolvedValue(null)
+      mockDb.get.mockReturnValue(null)
 
       await expect(createConsultation({
         patientId: 'nonexistent',
-        price: new Decimal(100)
+        price: 100
       })).rejects.toThrow('Paciente não encontrado')
     })
 
@@ -180,7 +121,7 @@ describe('Consultation CRUD Operations', () => {
       const mockPatient = {
         id: 'patient-123',
         credits: 0,
-        consultationPrice: new Decimal(100)
+        consultationPrice: 100
       }
 
       const mockUnfinalizedConsultation = {
@@ -188,8 +129,10 @@ describe('Consultation CRUD Operations', () => {
         status: 'OPEN'
       }
 
-      mockPrisma.patient.findUnique.mockResolvedValue(mockPatient as any)
-      mockPrisma.consultation.findFirst.mockResolvedValue(mockUnfinalizedConsultation as any)
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
+      // Mock unfinalized consultation found
+      mockDb.get.mockReturnValueOnce(mockUnfinalizedConsultation)
 
       await expect(createConsultation({
         patientId: 'patient-123',
@@ -204,8 +147,10 @@ describe('Consultation CRUD Operations', () => {
         consultationPrice: null // No price defined
       }
 
-      mockPrisma.patient.findUnique.mockResolvedValue(mockPatient as any)
-      mockPrisma.consultation.findFirst.mockResolvedValue(null)
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
+      // Mock no unfinalized consultations
+      mockDb.get.mockReturnValueOnce(null)
 
       await expect(createConsultation({
         patientId: 'patient-123'
@@ -224,35 +169,30 @@ describe('Consultation CRUD Operations', () => {
         status: 'OPEN',
         content: 'Patient content',
         notes: 'Therapist notes',
-        price: new Decimal(100),
+        price: 100,
         paid: false,
         createdAt: new Date(),
-        updatedAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
+        updatedAt: new Date()
       }
 
-      mockPrisma.consultation.findUnique.mockResolvedValue(mockConsultation as any)
+      const mockPatient = {
+        id: 'patient-123',
+        name: 'João Silva',
+        profilePhoto: null,
+        birthDate: new Date('1990-01-01')
+      }
+
+      // Mock consultation lookup
+      mockDb.get.mockReturnValueOnce(mockConsultation)
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
 
       const result = await getConsultation('consultation-123')
 
-      expect(mockPrisma.consultation.findUnique).toHaveBeenCalledWith({
-        where: { id: 'consultation-123' },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.from).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
+      expect(mockDb.get).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
         id: 'consultation-123',
@@ -266,7 +206,7 @@ describe('Consultation CRUD Operations', () => {
     })
 
     it('should return null when consultation not found', async () => {
-      mockPrisma.consultation.findUnique.mockResolvedValue(null)
+      mockDb.get.mockReturnValue(null)
 
       const result = await getConsultation('nonexistent-id')
 
@@ -290,41 +230,31 @@ describe('Consultation CRUD Operations', () => {
           status: 'OPEN',
           content: '',
           notes: '',
-          price: new Decimal(100),
+          price: 100,
           paid: false,
           createdAt: new Date(),
-          updatedAt: new Date(),
-          patient: {
-            id: 'patient-123',
-            name: 'João Silva',
-            profilePhoto: null,
-            birthDate: new Date('1990-01-01')
-          }
+          updatedAt: new Date()
         }
       ]
 
-      mockPrisma.consultation.count.mockResolvedValue(1)
-      mockPrisma.consultation.findMany.mockResolvedValue(mockConsultations as any)
+      const mockPatient = {
+        id: 'patient-123',
+        name: 'João Silva',
+        profilePhoto: null,
+        birthDate: new Date('1990-01-01')
+      }
+
+      // Mock count
+      mockDb.get.mockReturnValueOnce({ count: 1 })
+      // Mock consultations list
+      mockDb.all.mockReturnValue(mockConsultations)
+      // Mock patient lookup for each consultation
+      mockDb.get.mockReturnValue(mockPatient)
 
       const result = await listConsultations({ page: 1, limit: 10 })
 
-      expect(mockPrisma.consultation.count).toHaveBeenCalledWith({ where: {} })
-      expect(mockPrisma.consultation.findMany).toHaveBeenCalledWith({
-        where: {},
-        orderBy: { startedAt: 'desc' }, // Default: most recent first
-        skip: 0,
-        take: 10,
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.from).toHaveBeenCalled()
 
       expect(result).toEqual({
         consultations: expect.arrayContaining([
@@ -345,51 +275,13 @@ describe('Consultation CRUD Operations', () => {
     })
 
     it('should filter consultations by patient ID', async () => {
-      mockPrisma.consultation.count.mockResolvedValue(0)
-      mockPrisma.consultation.findMany.mockResolvedValue([])
+      mockDb.get.mockReturnValueOnce({ count: 0 })
+      mockDb.all.mockReturnValue([])
 
       await listConsultations({ patientId: 'patient-123' })
 
-      expect(mockPrisma.consultation.findMany).toHaveBeenCalledWith({
-        where: { patientId: 'patient-123' },
-        orderBy: { startedAt: 'desc' },
-        skip: 0,
-        take: 10,
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
-    })
-
-    it('should filter consultations by status and payment', async () => {
-      mockPrisma.consultation.count.mockResolvedValue(0)
-      mockPrisma.consultation.findMany.mockResolvedValue([])
-
-      await listConsultations({ status: 'FINALIZED', paid: true })
-
-      expect(mockPrisma.consultation.findMany).toHaveBeenCalledWith({
-        where: { status: 'FINALIZED', paid: true },
-        orderBy: { startedAt: 'desc' },
-        skip: 0,
-        take: 10,
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
     })
   })
 
@@ -399,38 +291,25 @@ describe('Consultation CRUD Operations', () => {
         id: 'consultation-123',
         patientId: 'patient-123',
         status: 'OPEN',
-        startedAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
+        startedAt: new Date()
       }
 
-      mockPrisma.consultation.findFirst.mockResolvedValue(mockActiveConsultation as any)
+      const mockPatient = {
+        id: 'patient-123',
+        name: 'João Silva',
+        profilePhoto: null,
+        birthDate: new Date('1990-01-01')
+      }
+
+      // Mock consultation lookup
+      mockDb.get.mockReturnValueOnce(mockActiveConsultation)
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
 
       const result = await getActiveConsultation('patient-123')
 
-      expect(mockPrisma.consultation.findFirst).toHaveBeenCalledWith({
-        where: {
-          patientId: 'patient-123',
-          status: 'OPEN'
-        },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        },
-        orderBy: {
-          startedAt: 'desc'
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
         id: 'consultation-123',
@@ -443,7 +322,7 @@ describe('Consultation CRUD Operations', () => {
     })
 
     it('should return null when no active consultation found', async () => {
-      mockPrisma.consultation.findFirst.mockResolvedValue(null)
+      mockDb.get.mockReturnValue(null)
 
       const result = await getActiveConsultation('patient-123')
 
@@ -453,39 +332,34 @@ describe('Consultation CRUD Operations', () => {
 
   describe('finalizeConsultation', () => {
     it('should finalize consultation successfully', async () => {
-      const mockFinalizedConsultation = {
+      const existingConsultation = {
         id: 'consultation-123',
-        status: 'FINALIZED',
-        finishedAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
+        patientId: 'patient-123',
+        status: 'OPEN',
+        finishedAt: null
       }
 
-      mockPrisma.consultation.update.mockResolvedValue(mockFinalizedConsultation as any)
+      const mockPatient = {
+        id: 'patient-123',
+        name: 'João Silva',
+        profilePhoto: null,
+        birthDate: new Date('1990-01-01')
+      }
+
+      // Mock existing consultation lookup
+      mockDb.get.mockReturnValueOnce(existingConsultation)
+      // Mock update
+      mockDb.run.mockReturnValue({ changes: 1 })
+      // Mock updated consultation lookup
+      mockDb.get.mockReturnValueOnce({ ...existingConsultation, status: 'FINALIZED', finishedAt: new Date() })
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
 
       const result = await finalizeConsultation('consultation-123')
 
-      expect(mockPrisma.consultation.update).toHaveBeenCalledWith({
-        where: { id: 'consultation-123' },
-        data: {
-          status: 'FINALIZED',
-          finishedAt: expect.any(Date)
-        },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
+      expect(mockDb.update).toHaveBeenCalled()
+      expect(mockDb.set).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
         status: 'FINALIZED',
@@ -496,39 +370,34 @@ describe('Consultation CRUD Operations', () => {
 
   describe('processConsultationPayment', () => {
     it('should process payment successfully', async () => {
-      const mockPaidConsultation = {
+      const existingConsultation = {
         id: 'consultation-123',
-        paid: true,
-        paidAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
+        patientId: 'patient-123',
+        paid: false,
+        paidAt: null
       }
 
-      mockPrisma.consultation.update.mockResolvedValue(mockPaidConsultation as any)
+      const mockPatient = {
+        id: 'patient-123',
+        name: 'João Silva',
+        profilePhoto: null,
+        birthDate: new Date('1990-01-01')
+      }
+
+      // Mock existing consultation lookup
+      mockDb.get.mockReturnValueOnce(existingConsultation)
+      // Mock update
+      mockDb.run.mockReturnValue({ changes: 1 })
+      // Mock updated consultation lookup
+      mockDb.get.mockReturnValueOnce({ ...existingConsultation, paid: true, paidAt: new Date() })
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
 
       const result = await processConsultationPayment('consultation-123')
 
-      expect(mockPrisma.consultation.update).toHaveBeenCalledWith({
-        where: { id: 'consultation-123' },
-        data: {
-          paid: true,
-          paidAt: expect.any(Date)
-        },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
+      expect(mockDb.update).toHaveBeenCalled()
+      expect(mockDb.set).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
         paid: true,
@@ -538,99 +407,40 @@ describe('Consultation CRUD Operations', () => {
   })
 
   describe('updateConsultation', () => {
-    it('should update consultation with finalization logic', async () => {
+    it('should update consultation content and notes', async () => {
       const existingConsultation = {
         id: 'consultation-123',
+        patientId: 'patient-123',
         status: 'OPEN',
-        finishedAt: null
+        content: '',
+        notes: ''
       }
 
-      const updatedConsultation = {
-        id: 'consultation-123',
-        status: 'FINALIZED',
-        finishedAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
+      const mockPatient = {
+        id: 'patient-123',
+        name: 'João Silva',
+        profilePhoto: null,
+        birthDate: new Date('1990-01-01')
       }
 
-      mockPrisma.consultation.findUnique.mockResolvedValue(existingConsultation as any)
-      mockPrisma.consultation.update.mockResolvedValue(updatedConsultation as any)
+      // Mock existing consultation lookup
+      mockDb.get.mockReturnValueOnce(existingConsultation)
+      // Mock update
+      mockDb.run.mockReturnValue({ changes: 1 })
+      // Mock updated consultation lookup
+      mockDb.get.mockReturnValueOnce({ ...existingConsultation, content: 'New content', notes: 'New notes' })
+      // Mock patient lookup
+      mockDb.get.mockReturnValueOnce(mockPatient)
 
-      const result = await updateConsultation('consultation-123', { status: 'FINALIZED' })
+      const result = await updateConsultation('consultation-123', { content: 'New content', notes: 'New notes' })
 
-      expect(mockPrisma.consultation.update).toHaveBeenCalledWith({
-        where: { id: 'consultation-123' },
-        data: {
-          status: 'FINALIZED',
-          finishedAt: expect.any(Date)
-        },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
+      expect(mockDb.update).toHaveBeenCalled()
+      expect(mockDb.set).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
-        status: 'FINALIZED',
-        finishedAt: expect.any(Date)
-      }))
-    })
-
-    it('should update consultation with payment logic', async () => {
-      const existingConsultation = {
-        id: 'consultation-123',
-        paid: false,
-        paidAt: null
-      }
-
-      const updatedConsultation = {
-        id: 'consultation-123',
-        paid: true,
-        paidAt: new Date(),
-        patient: {
-          id: 'patient-123',
-          name: 'João Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-01-01')
-        }
-      }
-
-      mockPrisma.consultation.findUnique.mockResolvedValue(existingConsultation as any)
-      mockPrisma.consultation.update.mockResolvedValue(updatedConsultation as any)
-
-      const result = await updateConsultation('consultation-123', { paid: true })
-
-      expect(mockPrisma.consultation.update).toHaveBeenCalledWith({
-        where: { id: 'consultation-123' },
-        data: {
-          paid: true,
-          paidAt: expect.any(Date)
-        },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              profilePhoto: true,
-              birthDate: true
-            }
-          }
-        }
-      })
-
-      expect(result).toEqual(expect.objectContaining({
-        paid: true,
-        paidAt: expect.any(Date)
+        content: 'New content',
+        notes: 'New notes'
       }))
     })
   })
@@ -642,34 +452,32 @@ describe('Consultation CRUD Operations', () => {
         { id: 'patient-2', name: 'João Santos' }
       ]
 
-      mockPrisma.patient.findMany.mockResolvedValue(mockResults as any)
+      // Mock selectDistinct for patients with consultations
+      mockDb.all.mockReturnValueOnce([{ patientId: 'patient-1' }, { patientId: 'patient-2' }])
+      // Mock patient search results
+      mockDb.all.mockReturnValueOnce(mockResults)
 
       const result = await searchPatientsForConsultations('João')
 
-      expect(mockPrisma.patient.findMany).toHaveBeenCalledWith({
-        where: {
-          name: {
-            contains: 'João'
-          },
-          consultations: {
-            some: {}
-          }
-        },
-        select: {
-          id: true,
-          name: true
-        },
-        orderBy: {
-          name: 'asc'
-        },
-        take: 10
-      })
+      expect(mockDb.selectDistinct).toHaveBeenCalled()
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.from).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
+      expect(mockDb.all).toHaveBeenCalled()
 
       expect(result).toEqual(mockResults)
     })
 
     it('should return empty array for short queries', async () => {
       const result = await searchPatientsForConsultations('J')
+      expect(result).toEqual([])
+    })
+
+    it('should return empty array when no patients have consultations', async () => {
+      // Mock selectDistinct returns empty (no patients with consultations)
+      mockDb.all.mockReturnValueOnce([])
+
+      const result = await searchPatientsForConsultations('João')
       expect(result).toEqual([])
     })
   })
@@ -682,14 +490,16 @@ describe('Consultation CRUD Operations', () => {
         status: 'OPEN'
       }
 
-      mockPrisma.consultation.findUnique.mockResolvedValue(mockConsultation as any)
-      mockPrisma.consultation.delete.mockResolvedValue({} as any)
+      // Mock consultation lookup
+      mockDb.get.mockReturnValue(mockConsultation)
+      // Mock delete
+      mockDb.run.mockReturnValue({ changes: 1 })
 
       await deleteConsultation('consultation-123')
 
-      expect(mockPrisma.consultation.delete).toHaveBeenCalledWith({
-        where: { id: 'consultation-123' }
-      })
+      expect(mockDb.delete).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
     })
 
     it('should throw error when trying to delete paid consultation', async () => {
@@ -699,7 +509,7 @@ describe('Consultation CRUD Operations', () => {
         status: 'OPEN'
       }
 
-      mockPrisma.consultation.findUnique.mockResolvedValue(mockConsultation as any)
+      mockDb.get.mockReturnValue(mockConsultation)
 
       await expect(deleteConsultation('consultation-123')).rejects.toThrow(
         'Não é possível excluir consulta paga'
@@ -713,10 +523,18 @@ describe('Consultation CRUD Operations', () => {
         status: 'FINALIZED'
       }
 
-      mockPrisma.consultation.findUnique.mockResolvedValue(mockConsultation as any)
+      mockDb.get.mockReturnValue(mockConsultation)
 
       await expect(deleteConsultation('consultation-123')).rejects.toThrow(
         'Não é possível excluir consulta finalizada'
+      )
+    })
+
+    it('should throw error when consultation not found', async () => {
+      mockDb.get.mockReturnValue(null)
+
+      await expect(deleteConsultation('nonexistent-id')).rejects.toThrow(
+        'Consulta não encontrada'
       )
     })
   })

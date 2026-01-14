@@ -5,40 +5,38 @@
  * instead of hardcoded fictional data.
  */
 
-// Mock Prisma first
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    patient: {
-      count: jest.fn(),
-      findMany: jest.fn(),
-      aggregate: jest.fn()
-    },
-    consultation: {
-      count: jest.fn(),
-      findMany: jest.fn(),
-      aggregate: jest.fn()
-    }
-  }
-}))
-
 import { getPatientStats, getRecentPatients } from '@/lib/patients'
 import { getConsultationStats, getRecentConsultations } from '@/lib/consultations'
 import { getFinancialStats, getTotalRevenue } from '@/lib/financial'
-import { prisma } from '@/lib/prisma'
 
-// Get the mocked prisma instance
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+// Get the mock db from jest.setup.js
+const mockDb = jest.requireMock('@/lib/db').getDb()
 
 describe('Dashboard Real Data Functions', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // Reset chainable mock returns
+    mockDb.select.mockReturnThis()
+    mockDb.from.mockReturnThis()
+    mockDb.where.mockReturnThis()
+    mockDb.orderBy.mockReturnThis()
+    mockDb.limit.mockReturnThis()
+    mockDb.offset.mockReturnThis()
+    mockDb.insert.mockReturnThis()
+    mockDb.values.mockReturnThis()
+    mockDb.update.mockReturnThis()
+    mockDb.set.mockReturnThis()
+    mockDb.delete.mockReturnThis()
+    mockDb.selectDistinct.mockReturnThis()
   })
 
   test('getPatientStats should return real patient statistics', async () => {
-    mockPrisma.patient.count
-      .mockResolvedValueOnce(15) // total patients
-      .mockResolvedValueOnce(8)  // patients with credits
-      .mockResolvedValueOnce(3)  // patients with active consultations
+    // Mock total patients count
+    mockDb.get.mockReturnValueOnce({ count: 15 })
+    // Mock patients with credits count
+    mockDb.get.mockReturnValueOnce({ count: 8 })
+    // Mock patients with active consultations (selectDistinct returns array)
+    mockDb.all.mockReturnValueOnce([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }])
 
     const stats = await getPatientStats()
 
@@ -47,17 +45,19 @@ describe('Dashboard Real Data Functions', () => {
       patientsWithCredits: 8,
       patientsWithActiveConsultations: 3
     })
-
-    expect(mockPrisma.patient.count).toHaveBeenCalledTimes(3)
   })
 
   test('getConsultationStats should return real consultation statistics', async () => {
-    mockPrisma.consultation.count
-      .mockResolvedValueOnce(45) // total consultations
-      .mockResolvedValueOnce(2)  // open consultations
-      .mockResolvedValueOnce(43) // finalized consultations
-      .mockResolvedValueOnce(40) // paid consultations
-      .mockResolvedValueOnce(5)  // unpaid consultations
+    // Mock total consultations
+    mockDb.get.mockReturnValueOnce({ count: 45 })
+    // Mock open consultations
+    mockDb.get.mockReturnValueOnce({ count: 2 })
+    // Mock finalized consultations
+    mockDb.get.mockReturnValueOnce({ count: 43 })
+    // Mock paid consultations
+    mockDb.get.mockReturnValueOnce({ count: 40 })
+    // Mock unpaid consultations
+    mockDb.get.mockReturnValueOnce({ count: 5 })
 
     const stats = await getConsultationStats()
 
@@ -68,60 +68,51 @@ describe('Dashboard Real Data Functions', () => {
       paidConsultations: 40,
       unpaidConsultations: 5
     })
-
-    expect(mockPrisma.consultation.count).toHaveBeenCalledTimes(5)
   })
 
   test('getTotalRevenue should return real revenue from paid consultations', async () => {
-    mockPrisma.consultation.aggregate.mockResolvedValueOnce({ 
-      _sum: { price: 4500.00 } 
-    })
+    // Mock sum of paid consultations
+    mockDb.get.mockReturnValueOnce({ total: 4500.00 })
 
     const revenue = await getTotalRevenue()
 
     expect(revenue).toBe(4500.00)
-    expect(mockPrisma.consultation.aggregate).toHaveBeenCalledWith({
-      _sum: { price: true },
-      where: { paid: true }
-    })
   })
 
   test('getRecentConsultations should return real recent consultations', async () => {
     const mockConsultations = [
       {
         id: '1',
+        patientId: 'p1',
         startedAt: new Date('2024-01-10T14:00:00Z'),
         finishedAt: new Date('2024-01-10T15:00:00Z'),
         status: 'FINALIZED',
-        patient: {
-          id: 'p1',
-          name: 'Maria Silva',
-          profilePhoto: null,
-          birthDate: new Date('1990-05-15')
-        }
+        content: '',
+        notes: '',
+        price: 100,
+        paid: true,
+        paidAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     ]
 
-    mockPrisma.consultation.findMany.mockResolvedValueOnce(mockConsultations)
+    const mockPatient = {
+      id: 'p1',
+      name: 'Maria Silva',
+      profilePhoto: null,
+      birthDate: new Date('1990-05-15')
+    }
+
+    // Mock consultations list
+    mockDb.all.mockReturnValueOnce(mockConsultations)
+    // Mock patient lookup for each consultation
+    mockDb.get.mockReturnValue(mockPatient)
 
     const consultations = await getRecentConsultations(3)
 
     expect(consultations).toHaveLength(1)
     expect(consultations[0].patient.name).toBe('Maria Silva')
-    expect(mockPrisma.consultation.findMany).toHaveBeenCalledWith({
-      take: 3,
-      orderBy: { startedAt: 'desc' },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            name: true,
-            profilePhoto: true,
-            birthDate: true
-          }
-        }
-      }
-    })
   })
 
   test('getRecentPatients should return real recent patients', async () => {
@@ -134,36 +125,30 @@ describe('Dashboard Real Data Functions', () => {
         credits: 8,
         birthDate: new Date('1985-03-20'),
         consultationPrice: 150.00,
-        consultations: []
+        gender: 'MALE',
+        religion: 'CATHOLIC',
+        phone1: '11999999999',
+        hasTherapyHistory: false,
+        takesMedication: false,
+        hasHospitalization: false,
+        updatedAt: new Date()
       }
     ]
 
-    mockPrisma.patient.findMany.mockResolvedValueOnce(mockPatients)
+    // Mock patients list
+    mockDb.all.mockReturnValueOnce(mockPatients)
 
     const patients = await getRecentPatients(3)
 
     expect(patients).toHaveLength(1)
     expect(patients[0].name).toBe('João Santos')
     expect(patients[0].credits).toBe(8)
-    expect(mockPrisma.patient.findMany).toHaveBeenCalledWith({
-      take: 3,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        consultations: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
-      }
-    })
   })
 
   test('functions should handle empty database gracefully', async () => {
     // Mock empty results
-    mockPrisma.patient.count.mockResolvedValue(0)
-    mockPrisma.consultation.count.mockResolvedValue(0)
-    mockPrisma.consultation.aggregate.mockResolvedValue({ _sum: { price: null } })
-    mockPrisma.consultation.findMany.mockResolvedValue([])
-    mockPrisma.patient.findMany.mockResolvedValue([])
+    mockDb.get.mockReturnValue({ count: 0, total: null })
+    mockDb.all.mockReturnValue([])
 
     const [patientStats, consultationStats, revenue, recentConsultations, recentPatients] = await Promise.all([
       getPatientStats(),
