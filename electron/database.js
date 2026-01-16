@@ -1,9 +1,84 @@
 const initSqlJs = require('sql.js');
-const { existsSync, readFileSync, writeFileSync, mkdirSync } = require('fs');
+const { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } = require('fs');
 const { dirname, join } = require('path');
 
 let SQL = null;
 let db = null;
+
+const runMigrations = async (db, migrationsPath) => {
+  console.log('Running migrations from:', migrationsPath);
+  
+  if (!existsSync(migrationsPath)) {
+    console.log('No migrations directory found, skipping migrations');
+    return;
+  }
+  
+  // Criar tabela de controle de migrations se não existir
+  db.run(`
+    CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `);
+  
+  // Ler migrations aplicadas
+  const appliedMigrations = new Set();
+  try {
+    const result = db.exec('SELECT hash FROM __drizzle_migrations');
+    if (result.length > 0 && result[0].values) {
+      result[0].values.forEach(row => appliedMigrations.add(row[0]));
+    }
+  } catch (error) {
+    console.log('No migrations applied yet');
+  }
+  
+  // Ler arquivos de migration
+  const migrationFiles = readdirSync(migrationsPath)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
+  
+  console.log(`Found ${migrationFiles.length} migration files`);
+  
+  for (const file of migrationFiles) {
+    const hash = file.replace('.sql', '');
+    
+    if (appliedMigrations.has(hash)) {
+      console.log(`✓ Migration already applied: ${file}`);
+      continue;
+    }
+    
+    const migrationPath = join(migrationsPath, file);
+    const sql = readFileSync(migrationPath, 'utf-8');
+    
+    console.log(`Running migration: ${file}`);
+    
+    try {
+      // Dividir por statements (separados por ;)
+      const statements = sql
+        .split(';')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      
+      for (const statement of statements) {
+        db.run(statement);
+      }
+      
+      // Registrar migration como aplicada
+      db.run(
+        'INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)',
+        [hash, Date.now()]
+      );
+      
+      console.log(`✓ Migration applied: ${file}`);
+    } catch (error) {
+      console.error(`✗ Failed to apply migration ${file}:`, error);
+      throw error;
+    }
+  }
+  
+  console.log('All migrations completed successfully');
+};
 
 const initializeDatabase = async (databasePath) => {
   try {
@@ -40,7 +115,9 @@ const initializeDatabase = async (databasePath) => {
     }
     
     // Load existing database or create new one
-    if (existsSync(databasePath)) {
+    const isNewDatabase = !existsSync(databasePath);
+    
+    if (!isNewDatabase) {
       const buffer = readFileSync(databasePath);
       db = new SQL.Database(buffer);
       console.log('Loaded existing database');
@@ -49,69 +126,18 @@ const initializeDatabase = async (databasePath) => {
       console.log('Created new database');
     }
     
-    // Create Patient table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS Patient (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        profilePhoto TEXT,
-        birthDate INTEGER NOT NULL,
-        gender TEXT NOT NULL,
-        cpf TEXT,
-        rg TEXT,
-        religion TEXT NOT NULL,
-        legalGuardian TEXT,
-        legalGuardianEmail TEXT,
-        legalGuardianCpf TEXT,
-        phone1 TEXT NOT NULL,
-        phone2 TEXT,
-        email TEXT,
-        hasTherapyHistory INTEGER NOT NULL,
-        therapyHistoryDetails TEXT,
-        takesMedication INTEGER NOT NULL,
-        medicationSince TEXT,
-        medicationNames TEXT,
-        hasHospitalization INTEGER NOT NULL,
-        hospitalizationDate TEXT,
-        hospitalizationReason TEXT,
-        consultationPrice REAL,
-        consultationFrequency TEXT,
-        consultationDay TEXT,
-        credits INTEGER NOT NULL DEFAULT 0,
-        createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL
-      )
-    `);
+    // Run Drizzle migrations
+    // Em produção empacotada, as migrations estão em extraResources
+    let migrationsPath = join(__dirname, '..', 'drizzle');
     
-    // Create Patient indexes
-    db.run('CREATE INDEX IF NOT EXISTS Patient_name_idx ON Patient(name)');
-    db.run('CREATE INDEX IF NOT EXISTS Patient_birthDate_idx ON Patient(birthDate)');
-    db.run('CREATE INDEX IF NOT EXISTS Patient_credits_idx ON Patient(credits)');
-    db.run('CREATE INDEX IF NOT EXISTS Patient_createdAt_idx ON Patient(createdAt)');
+    // Se não encontrar, tentar em Resources (extraResources do electron-builder)
+    if (!existsSync(migrationsPath)) {
+      const { app } = require('electron');
+      const resourcesPath = process.resourcesPath || join(app.getAppPath(), '..');
+      migrationsPath = join(resourcesPath, 'drizzle');
+    }
     
-    // Create Consultation table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS Consultation (
-        id TEXT PRIMARY KEY,
-        patientId TEXT NOT NULL REFERENCES Patient(id),
-        startedAt INTEGER NOT NULL,
-        finishedAt INTEGER,
-        paidAt INTEGER,
-        status TEXT NOT NULL DEFAULT 'OPEN',
-        content TEXT NOT NULL DEFAULT '',
-        notes TEXT NOT NULL DEFAULT '',
-        price REAL NOT NULL,
-        paid INTEGER NOT NULL DEFAULT 0,
-        createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL
-      )
-    `);
-    
-    // Create Consultation indexes
-    db.run('CREATE INDEX IF NOT EXISTS Consultation_patientId_idx ON Consultation(patientId)');
-    db.run('CREATE INDEX IF NOT EXISTS Consultation_status_idx ON Consultation(status)');
-    db.run('CREATE INDEX IF NOT EXISTS Consultation_paid_idx ON Consultation(paid)');
-    db.run('CREATE INDEX IF NOT EXISTS Consultation_startedAt_idx ON Consultation(startedAt)');
+    await runMigrations(db, migrationsPath);
     
     // Save database to file
     const data = db.export();

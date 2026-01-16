@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path_1 = require("path");
-const child_process_1 = require("child_process");
 const fs_1 = require("fs");
 const os_1 = require("os");
 const os_2 = require("os");
@@ -32,8 +31,18 @@ if (!(0, fs_1.existsSync)(APP_DATA_PATH)) {
 }
 // Configurar variável de ambiente do banco
 process.env.DATABASE_URL = `file:${DATABASE_PATH}`;
+// Configurar caminho do app para uso no Next.js
+if (isDev) {
+    process.env.APP_PATH = (0, path_1.join)(__dirname, '..');
+}
+else {
+    const appPath = electron_1.app.getAppPath();
+    const isAsar = appPath.includes('.asar');
+    process.env.APP_PATH = isAsar ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath;
+}
 let mainWindow = null;
 let nextServer = null;
+let nextApp = null;
 const createWindow = async () => {
     console.log('Creating main window...');
     // Definir o caminho do ícone baseado no ambiente
@@ -52,12 +61,8 @@ const createWindow = async () => {
             preload: (0, path_1.join)(__dirname, 'preload.js'),
         },
         titleBarStyle: 'default',
-        show: true, // Mostrar imediatamente
-        center: true, // Centralizar na tela
-        alwaysOnTop: false,
-        skipTaskbar: false,
-        x: undefined, // Deixar o Electron escolher a posição
-        y: undefined, // Deixar o Electron escolher a posição
+        show: false, // Não mostrar até estar pronto
+        center: true,
     });
     console.log('BrowserWindow created');
     // Aguardar o servidor Next.js estar pronto
@@ -66,10 +71,9 @@ const createWindow = async () => {
     try {
         await mainWindow.loadURL(url);
         console.log('URL loaded successfully');
-        // Forçar a janela a aparecer e focar
+        // Mostrar e focar a janela após carregar
         mainWindow.show();
         mainWindow.focus();
-        mainWindow.center(); // Centralizar após carregar
         console.log('Window loaded and focused');
         console.log(`Window bounds: ${JSON.stringify(mainWindow.getBounds())}`);
         console.log(`Window visible: ${mainWindow.isVisible()}`);
@@ -93,7 +97,6 @@ const createWindow = async () => {
         // Mostrar janela mesmo com erro para debug
         mainWindow.show();
         mainWindow.focus();
-        mainWindow.center();
     }
 };
 const startNextServer = async () => {
@@ -128,37 +131,69 @@ const startNextServer = async () => {
         });
         return;
     }
-    // Em produção, iniciar o servidor Next.js
-    console.log('Production mode: starting Next.js server...');
-    const nextPath = (0, path_1.join)(__dirname, '..', 'node_modules', '.bin', 'next');
-    const nextArgs = ['start', '-p', port.toString()];
-    nextServer = (0, child_process_1.spawn)(nextPath, nextArgs, {
-        cwd: (0, path_1.join)(__dirname, '..'),
-        env: {
-            ...process.env,
-            NODE_ENV: 'production',
-        },
-    });
-    nextServer.stdout?.on('data', (data) => {
-        console.log(`Next.js: ${data.toString()}`);
-    });
-    nextServer.stderr?.on('data', (data) => {
-        console.error(`Next.js Error: ${data.toString()}`);
-    });
-    // Aguardar o servidor estar pronto
-    await new Promise((resolve) => {
-        const checkServer = () => {
-            const http = require('http');
-            const req = http.get(`http://localhost:${port}`, (res) => {
-                console.log('Next.js server is ready');
-                resolve(true);
+    // Em produção, iniciar o servidor Next.js programaticamente
+    console.log('Production mode: starting Next.js server programmatically...');
+    try {
+        const next = require('next');
+        // Determinar o caminho correto baseado no empacotamento
+        const appPath = electron_1.app.getAppPath();
+        const isAsar = appPath.includes('.asar');
+        // Se estiver em ASAR, usar o caminho desempacotado
+        let nextDir;
+        if (isAsar) {
+            // Arquivos desempacotados ficam em app.asar.unpacked
+            const unpackedPath = appPath.replace('app.asar', 'app.asar.unpacked');
+            nextDir = unpackedPath;
+            console.log(`Using unpacked path: ${nextDir}`);
+        }
+        else {
+            nextDir = appPath;
+            console.log(`Using app path: ${nextDir}`);
+        }
+        console.log(`Starting Next.js on port ${port}...`);
+        // Criar instância do Next.js
+        nextApp = next({
+            dev: false,
+            dir: nextDir,
+            conf: {
+                distDir: '.next',
+            },
+        });
+        console.log('Preparing Next.js...');
+        // Preparar o Next.js
+        await nextApp.prepare();
+        console.log('Next.js prepared successfully');
+        // Obter o request handler
+        const handle = nextApp.getRequestHandler();
+        // Criar servidor HTTP
+        const http = require('http');
+        const server = http.createServer((req, res) => {
+            handle(req, res);
+        });
+        // Iniciar servidor
+        await new Promise((resolve, reject) => {
+            server.listen(port, (err) => {
+                if (err) {
+                    console.error('Failed to start HTTP server:', err);
+                    reject(err);
+                }
+                else {
+                    console.log(`✓ Next.js server listening on http://localhost:${port}`);
+                    resolve();
+                }
             });
-            req.on('error', () => {
-                setTimeout(checkServer, 1000);
-            });
-        };
-        checkServer();
-    });
+            // Timeout de segurança
+            setTimeout(() => {
+                reject(new Error('Timeout starting HTTP server'));
+            }, 30000);
+        });
+        // Guardar referência ao servidor
+        nextServer = server;
+    }
+    catch (error) {
+        console.error('Failed to start Next.js server:', error);
+        throw error;
+    }
 };
 const initializeDatabaseWrapper = async () => {
     try {
@@ -256,29 +291,102 @@ electron_1.ipcMain.handle('create-backup', async (_event, destinationPath) => {
 });
 electron_1.app.whenReady().then(async () => {
     try {
+        console.log('=== Ebers Application Starting ===');
+        console.log(`Platform: ${process.platform}`);
+        console.log(`isDev: ${isDev}`);
+        console.log(`isPackaged: ${electron_1.app.isPackaged}`);
+        console.log(`App path: ${electron_1.app.getAppPath()}`);
+        console.log(`Resources path: ${process.resourcesPath}`);
+        console.log(`__dirname: ${__dirname}`);
+        // Criar menu com opção para abrir DevTools
+        const template = [
+            {
+                label: 'Ebers',
+                submenu: [
+                    { role: 'about', label: 'Sobre o Ebers' },
+                    { type: 'separator' },
+                    { role: 'quit', label: 'Sair' }
+                ]
+            },
+            {
+                label: 'Editar',
+                submenu: [
+                    { role: 'undo', label: 'Desfazer' },
+                    { role: 'redo', label: 'Refazer' },
+                    { type: 'separator' },
+                    { role: 'cut', label: 'Recortar' },
+                    { role: 'copy', label: 'Copiar' },
+                    { role: 'paste', label: 'Colar' },
+                    { role: 'selectAll', label: 'Selecionar Tudo' }
+                ]
+            },
+            {
+                label: 'Visualizar',
+                submenu: [
+                    { role: 'reload', label: 'Recarregar' },
+                    { role: 'forceReload', label: 'Forçar Recarregar' },
+                    {
+                        label: 'Abrir DevTools',
+                        accelerator: 'CmdOrCtrl+Alt+I',
+                        click: () => {
+                            if (mainWindow) {
+                                mainWindow.webContents.openDevTools();
+                            }
+                        }
+                    },
+                    { type: 'separator' },
+                    { role: 'resetZoom', label: 'Zoom Padrão' },
+                    { role: 'zoomIn', label: 'Aumentar Zoom' },
+                    { role: 'zoomOut', label: 'Diminuir Zoom' },
+                    { type: 'separator' },
+                    { role: 'togglefullscreen', label: 'Tela Cheia' }
+                ]
+            },
+            {
+                label: 'Janela',
+                submenu: [
+                    { role: 'minimize', label: 'Minimizar' },
+                    { role: 'zoom', label: 'Zoom' },
+                    { type: 'separator' },
+                    { role: 'front', label: 'Trazer para Frente' }
+                ]
+            }
+        ];
+        const menu = electron_1.Menu.buildFromTemplate(template);
+        electron_1.Menu.setApplicationMenu(menu);
         // Configurações específicas para macOS
         if (process.platform === 'darwin') {
             electron_1.app.dock.show();
+            console.log('macOS dock shown');
         }
         // Inicializar banco de dados
+        console.log('Initializing database...');
         await initializeDatabaseWrapper();
+        console.log('Database initialized');
         // Iniciar servidor Next.js e aguardar estar pronto
+        console.log('Starting Next.js server...');
         await startNextServer();
         console.log('Next.js server confirmed ready, creating window...');
         // Criar janela principal
         await createWindow();
-        console.log('Application started successfully');
+        console.log('=== Application started successfully ===');
         console.log(`Database path: ${DATABASE_PATH}`);
         console.log(`Network addresses: ${getNetworkInfo().join(', ')}`);
     }
     catch (error) {
-        console.error('Failed to start application:', error);
+        console.error('=== Failed to start application ===');
+        console.error(error);
+        // Mostrar dialog de erro antes de sair
+        electron_1.dialog.showErrorBox('Erro ao Iniciar', `Falha ao iniciar a aplicação:\n\n${error instanceof Error ? error.message : String(error)}\n\nVerifique os logs no Console.`);
         electron_1.app.quit();
     }
 });
 electron_1.app.on('window-all-closed', () => {
     if (nextServer) {
-        nextServer.kill();
+        nextServer.kill?.();
+    }
+    if (nextApp) {
+        nextApp.close?.();
     }
     if (process.platform !== 'darwin') {
         electron_1.app.quit();
@@ -297,6 +405,9 @@ electron_1.app.on('activate', async () => {
 });
 electron_1.app.on('before-quit', () => {
     if (nextServer) {
-        nextServer.kill();
+        nextServer.kill?.();
+    }
+    if (nextApp) {
+        nextApp.close?.();
     }
 });

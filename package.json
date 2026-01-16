@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio",
     "db:init": "node scripts/init-db.js",
     "install:electron": "node scripts/install-electron.js",
+    "postinstall": "node scripts/post-install.js",
     "electron": "NODE_ENV=development electron .",
     "electron:standalone": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && NODE_ENV=development electron .\"",
     "electron:debug": "pkill -f electron || true && NODE_ENV=development electron .",
@@ -23,10 +24,17 @@
     "electron:build": "node scripts/build-electron.js",
     "build:electron": "tsc --project electron/tsconfig.json",
     "generate:icons": "node scripts/generate-icons.js && node scripts/generate-favicon.js",
-    "dist": "npm run generate:icons && npm run build && npm run build:electron && electron-builder",
-    "dist:mac": "npm run generate:icons && npm run build && npm run build:electron && electron-builder --mac",
-    "dist:win": "npm run generate:icons && npm run build && npm run build:electron && electron-builder --win",
-    "dist:linux": "npm run generate:icons && npm run build && npm run build:electron && electron-builder --linux"
+    "prepare:build": "node scripts/prepare-build.js",
+    "dist": "npm run prepare:build && electron-builder",
+    "dist:mac": "npm run prepare:build && electron-builder --mac",
+    "dist:win": "npm run prepare:build && electron-builder --win",
+    "dist:linux": "npm run prepare:build && electron-builder --linux",
+    "pack": "npm run prepare:build && electron-builder --dir",
+    "pack:mac": "npm run prepare:build && electron-builder --mac --dir",
+    "pack:win": "npm run prepare:build && electron-builder --win --dir",
+    "pack:linux": "npm run prepare:build && electron-builder --linux --dir",
+    "checksums": "node scripts/generate-checksums.js",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "@tiptap/pm": "^3.15.3",
@@ -67,22 +75,43 @@
     "postcss": "^8.5.6",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.19",
-    "typescript": "^5.7.2",
+    "typescript": "5.9.3",
     "wait-on": "^8.0.1"
   },
   "build": {
     "appId": "com.ebers.app",
     "productName": "Ebers",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "public/icons"
     },
     "files": [
       "electron/**/*",
       ".next/**/*",
       "public/**/*",
       "lib/db/**/*",
+      "drizzle/**/*",
       "node_modules/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      ".next/**/*",
+      "node_modules/next/**/*",
+      "node_modules/sharp/**/*",
+      "node_modules/@next/**/*",
+      "node_modules/jsdom/**/*",
+      "node_modules/isomorphic-dompurify/**/*",
+      "node_modules/dompurify/**/*",
+      "node_modules/sql.js/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "drizzle",
+        "to": "drizzle",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "mac": {
       "category": "public.app-category.medical",
@@ -94,16 +123,79 @@
             "x64",
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
-      ]
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "title": "Ebers ${version}",
+      "backgroundColor": "#197BBD"
     },
     "win": {
       "icon": "public/icons/icon-for-ico.png",
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ebers"
     },
     "linux": {
       "icon": "public/icons/icon.png",
-      "target": "AppImage"
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Office"
     }
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

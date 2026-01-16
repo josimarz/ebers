@@ -18,29 +18,38 @@ let SQL: SqlJsStatic | null = null
 
 async function initSQL(): Promise<SqlJsStatic> {
   if (!SQL) {
-    // In Node.js, we need to provide the WASM binary directly
-    const wasmPath = join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm')
+    let wasmPath: string;
+    let wasmBinary: Buffer | undefined;
     
-    // Read the WASM file as a buffer and pass it directly
-    let wasmBinary: Buffer | undefined
+    // Usar APP_PATH se disponível (definido pelo Electron)
+    if (process.env.APP_PATH) {
+      wasmPath = join(process.env.APP_PATH, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+    } else {
+      // Fallback para desenvolvimento
+      wasmPath = join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+    }
+    
+    // Tentar ler o WASM file
     if (existsSync(wasmPath)) {
-      wasmBinary = readFileSync(wasmPath)
+      wasmBinary = readFileSync(wasmPath);
+    } else {
+      console.warn(`WASM file not found at: ${wasmPath}`);
     }
     
     const config: SqlJsConfig = {
       wasmBinary,
-      // Fallback locateFile for environments where wasmBinary doesn't work
+      // Fallback locateFile para ambientes onde wasmBinary não funciona
       locateFile: (file: string) => {
         if (file === 'sql-wasm.wasm') {
-          return wasmPath
+          return wasmPath;
         }
-        return file
+        return file;
       }
-    }
+    };
     
-    SQL = await initSqlJs(config)
+    SQL = await initSqlJs(config);
   }
-  return SQL
+  return SQL;
 }
 
 export async function getDbAsync() {
@@ -67,6 +76,13 @@ export async function getDbAsync() {
     }
     
     dbInstance = drizzle(sqliteInstance, { schema })
+    
+    // Setup auto-save every 5 seconds
+    if (typeof setInterval !== 'undefined') {
+      setInterval(() => {
+        saveDatabase()
+      }, 5000)
+    }
   }
   return dbInstance
 }

@@ -3,7 +3,21 @@
  * Provides input sanitization, XSS protection, and data cleaning functions
  */
 
-import DOMPurify from 'isomorphic-dompurify'
+// Importação condicional do DOMPurify
+let DOMPurify: any = null;
+let DOMPurifyLoaded = false;
+
+// Tentar importar DOMPurify apenas se estiver no browser
+if (typeof window !== 'undefined') {
+  // No browser, usar DOMPurify diretamente
+  import('dompurify').then(module => {
+    DOMPurify = module.default;
+    DOMPurifyLoaded = true;
+  }).catch(() => {
+    console.warn('DOMPurify not available in browser');
+    DOMPurifyLoaded = true; // Marcar como carregado mesmo com erro
+  });
+}
 
 /**
  * HTML sanitization configuration for rich text content
@@ -34,6 +48,17 @@ const RICH_TEXT_CONFIG = {
 export function sanitizeRichText(html: string): string {
   if (!html || typeof html !== 'string') {
     return ''
+  }
+
+  // Se DOMPurify não estiver disponível, usar sanitização básica
+  if (!DOMPurify) {
+    // Sanitização básica: remover tags script e event handlers
+    return html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
+      .replace(/javascript:/gi, '')
+      .trim();
   }
 
   // Configure DOMPurify for rich text

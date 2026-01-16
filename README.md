@@ -10,6 +10,7 @@ Este sistema pode ser executado como uma **aplicação desktop** usando Electron
 - ✅ Banco de dados SQLite armazenado localmente
 - ✅ Acesso via rede local para iPads
 - ✅ Distribuição como aplicativo nativo (macOS, Windows, Linux)
+- ✅ Ícone com símbolo Ψ (PSY) do alfabeto grego
 
 ### Executar como Desktop
 
@@ -25,16 +26,23 @@ npm run electron
 ### Gerar Distribuíveis
 
 ```bash
-# Todas as plataformas
-npm run dist
+# Release automatizada (recomendado)
+npm run release 1.0.0
 
-# Plataforma específica
-npm run dist:mac    # macOS
-npm run dist:win    # Windows  
-npm run dist:linux  # Linux
+# Ou manualmente
+npm run dist        # Plataforma atual
+npm run dist:mac    # macOS (.dmg + .zip)
+npm run dist:win    # Windows (.exe + portable)
+npm run dist:linux  # Linux (.AppImage + .deb)
+
+# Gerar checksums de segurança
+npm run checksums
 ```
 
-📖 **[Ver documentação completa do Electron](docs/ELECTRON.md)**
+📖 **Documentação de Distribuição:**
+- [Guia Rápido](docs/QUICK-START.md) - Comandos essenciais
+- [Guia de Build](docs/BUILD.md) - Build detalhado
+- [Guia de Distribuição](docs/DISTRIBUTION.md) - Publicação e instalação
 
 ## 🌐 Tecnologias
 
