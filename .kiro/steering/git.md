@@ -7,172 +7,272 @@ inclusion: always
    Learn about inclusion modes: https://kiro.dev/docs/steering/#inclusion-modes
 -------------------------------------------------------------------------------------> 
 
-# Conventional Commits & Conventional Branches — Steering Guide
+# Git Best Practices  
+**Commits · Branch Naming · Pull Requests (with GitHub CLI)**
 
-This document combines the **Conventional Commits specification** with **branch naming best practices** to help you maintain **clear, consistent, and automation-friendly** Git history and workflows.
+This document defines a practical and complete standard for working with Git in a professional environment. It is designed for both humans and automation (CI/CD, changelog generators, release tools, and AI systems).
 
----
-
-## 📌 Overview
-
-**Conventional Commits** defines a structured format for commit messages that supports **semver versioning, automation, and readability**.
-**Conventional Branches** extends that structure to Git branch names, helping teams and tools identify the purpose of branches quickly. ([Conventional Branch][1])
+It is based on widely adopted conventions such as Conventional Commits, Conventional Branches, and collaborative code-review practices.
 
 ---
 
-## 🧱 Conventional Commit Messages
+## 1. Commit Message Best Practices
 
-### Structure
+All commits **must follow the Conventional Commits format**.
+
+### 1.1 Format
 
 ```
-<type>[optional scope]: <description>
+
+<type>[optional scope]: <short description>
 
 [optional body]
 
 [optional footer(s)]
+
 ```
 
-* `type`: Category of change (feat, fix, etc.).
-* `scope` (optional): Area of code affected.
-* `description`: Imperative summary.
-* `body`: Optional detailed explanation.
-* `footer`: Metadata (issues references, breaking changes).
+### 1.2 Types
+
+Use these standardized types:
+
+| Type       | Purpose                                                   |
+|------------|-----------------------------------------------------------|
+| `feat`     | A new feature                                             |
+| `fix`      | A bug fix                                                 |
+| `docs`     | Documentation changes only                               |
+| `style`    | Formatting, whitespace, no logic changes                  |
+| `refactor` | Code change that neither fixes a bug nor adds a feature   |
+| `perf`     | Performance improvements                                 |
+| `test`     | Adding or updating tests                                  |
+| `build`    | Build system or dependency changes                        |
+| `ci`       | CI/CD configuration changes                               |
+| `chore`    | Maintenance tasks                                         |
+
+### 1.3 Rules
+
+- Use the **imperative mood** in the subject line:
+  - Good: `fix: handle null user in auth middleware`
+  - Bad: `fixed auth middleware`
+- Keep the subject line **short (≤ 72 chars)**.
+- Be **specific and descriptive**.
+- Use a **scope** when it adds clarity.
+- Use the **body** to explain *why* the change exists.
+- Use **footers** for:
+  - Breaking changes
+  - Issue references (`Refs: #123`)
+
+### 1.4 Examples
+
+**Simple commit**
+```
+
+feat: add user profile page
+
+```
+
+**With scope**
+```
+
+fix(auth): prevent token refresh loop
+
+```
+
+**With body**
+```
+
+refactor(api): extract pagination logic
+
+The pagination logic was duplicated across three endpoints.
+This change centralizes it in a shared helper.
+
+```
+
+**Breaking change**
+```
+
+feat(config): replace YAML with TOML
+
+BREAKING CHANGE: configuration files must now use .toml format.
+
+```
 
 ---
 
-### Common Types
+## 2. Branch Naming Conventions
 
-| Type                   | Purpose                               |
-| ---------------------- | ------------------------------------- |
-| `feat`                 | New feature                           |
-| `fix`                  | Bug fix                               |
-| `docs`                 | Documentation                         |
-| `style`                | Formatting or stylistic changes       |
-| `refactor`             | Code modification without feature/fix |
-| `perf`                 | Performance improvements              |
-| `test`                 | Tests added or modified               |
-| `ci`                   | CI config changes                     |
-| `build`                | Build system / dependencies changes   |
-| `chore`                | Maintenance tasks                     |
-| `revert`               | Revert a previous commit              |
-| (*Extendable by team*) |                                       |
+Branches must clearly communicate **intent and scope**.
 
----
-
-### Best Practices for Messages
-
-1. **Use imperative mood**: e.g., *“add login”*, not *“added login”*.
-2. **Include a scope when meaningful**: improves context.
-3. **Keep description concise** (≤72 characters).
-4. **Use body for motivation/impact**.
-5. **Use footer for breaking changes and ticket refs**.
-
----
-
-## 🌿 Conventional Branch Naming
-
-Standardizing branch names improves readability, tooling integration (CI/CD workflows), and collaboration. ([Conventional Branch][1])
-
-### Naming Format
+### 2.1 Format
 
 ```
-<type>/<description>
-```
 
-### Common Prefix Types
-
-| Prefix                                                    | Purpose                   |
-| --------------------------------------------------------- | ------------------------- |
-| `main`                                                    | Base code branch          |
-| `feature/`                                                | New features              |
-| `bugfix/` or `fix/`                                       | Bug fixes                 |
-| `hotfix/`                                                 | Critical production fixes |
-| `release/`                                                | Release preparation       |
-| `chore/`                                                  | Maintenance tasks         |
-| (*Teams may extend if needed*) ([Conventional Branch][1]) |                           |
-
----
-
-### Basic Rules
-
-1. **Lowercase only** — avoid uppercase; Git branch search is case-sensitive. ([DEV Community][2])
-2. **Use hyphens (`-`) to separate words.**
-3. **No consecutive or trailing hyphens or dots.** ([Conventional Branch][1])
-4. **Clear and concise descriptions** that signal intent. ([Conventional Branch][1])
-5. **Include issue/ticket numbers** (if applicable) for traceability. ([Conventional Branch][1])
-
-**Examples**
+<prefix>/<short-description>
 
 ```
+
+- Use **lowercase**
+- Use **hyphens** (`-`) instead of spaces or underscores
+- Keep names **short and meaningful**
+
+### 2.2 Prefixes
+
+| Prefix     | Purpose                     |
+|------------|-----------------------------|
+| `feature`  | New functionality            |
+| `bugfix`   | Bug fixes                    |
+| `hotfix`   | Urgent production fixes      |
+| `release`  | Release preparation          |
+| `docs`     | Documentation work           |
+| `chore`    | Maintenance tasks            |
+
+### 2.3 Examples
+
+```
+
 feature/user-authentication
-bugfix/issue-234-fix-login-error
-hotfix/critical-security-patch
-release/v1.2.0
+feature/payment-webhooks
+bugfix/fix-login-redirect
+hotfix/critical-null-pointer
+release/v1.4.0
+docs/api-auth-guide
 chore/update-dependencies
+
+```
+
+### 2.4 With Ticket Numbers (Optional)
+
+```
+
+feature/JIRA-231-add-password-reset
+bugfix/PROJ-88-fix-timezone-bug
+
 ```
 
 ---
 
-## 🧠 Branching Best Practices
+## 3. Pull Request Best Practices
 
-### 🎯 Branch Creation
+Pull Requests (PRs) are the main collaboration and review mechanism.  
+They must be **clear, focused, and respectful of reviewers’ time**.
 
-* **Branch off from latest `main` or stable base** to reduce merge conflicts.
-* **Keep branches focused on a single task** (feature, fix, chore).
-* **Delete merged branches** to avoid clutter. ([docs.tuturuuu.com][3])
+All PRs in this workflow are created using **GitHub CLI (`gh`)**.
+
+### 3.1 Scope Rules
+
+- A PR should solve **one problem**.
+- Do not mix:
+  - Refactors + features
+  - Formatting + logic changes
+  - Multiple unrelated fixes
+
+If changes are conceptually different, split them into multiple PRs.
+
+### 3.2 Title
+
+Use a clear, action-oriented title:
+
+- `Add password reset flow`
+- `Fix race condition in cache layer`
+- `Refactor email service`
+
+Avoid vague titles:
+
+- `Updates`
+- `Fix stuff`
+- `Changes`
+
+### 3.3 Description Template
+
+Use a consistent structure:
+
+```markdown
+## Summary
+Explain what this PR does in 1–3 sentences.
+
+## Motivation
+Why is this change needed? What problem does it solve?
+
+## Changes
+- Added password reset endpoint
+- Created email template
+- Updated rate-limiting rules
+
+## How to Test
+1. Run `make dev`
+2. Create a user
+3. Request password reset
+4. Verify email content
+
+## Related Issues
+- Closes #123
+````
+
+### 3.4 Before Opening a PR
+
+* Rebase on the latest main branch
+* Run tests locally
+* Ensure linting/formatting passes
+* Remove debug code
+* Confirm the PR is minimal and focused
+
+### 3.5 Creating a PR with GitHub CLI
+
+From your feature branch:
+
+```bash
+gh pr create \
+  --base main \
+  --head feature/user-authentication \
+  --title "Add user authentication flow" \
+  --body-file pr.md
+```
+
+Where `pr.md` contains the structured description.
+
+For interactive mode:
+
+```bash
+gh pr create
+```
+
+GitHub CLI will prompt for:
+
+* Title
+* Description
+* Base branch
+* Reviewers
+
+### 3.6 During Review
+
+* Be polite and constructive in comments
+* Make feedback **actionable**
+* Prefer explanations over short commands
+* If a suggestion is large, propose a patch
+
+Example review comment:
+
+> This logic is correct, but it’s hard to follow.
+> Consider extracting it into a `parseToken()` helper so it can be reused and tested.
+
+### 3.7 After Feedback
+
+* Address comments promptly
+* Push fixes in new commits
+* Reply when a comment is resolved
+* Request re-review if changes are significant
 
 ---
 
-### 📌 Naming Clarity
+## 4. Why This Matters
 
-* Use **purpose-first prefixes** (e.g., `feature/`, `bugfix/`).
-* **Avoid vague names** like `new`, `update`, or `work`.
-* Include **ticket identifiers** when using issue trackers.
-* Avoid embedding developer names; branches should represent *work, not person*. ([Conventional Branch][1])
+Following these conventions provides:
 
----
+* A readable and searchable Git history
+* Automated changelogs and releases
+* Faster code reviews
+* Better onboarding for new team members
+* High-quality input for tools and AI systems
 
-### 🔁 Workflow Considerations
-
-* **Short-lived branches** are healthier than long-lived ones:
-  they reduce conflicts and keep integration frequent.
-* **Rename branches** if the scope significantly changes (but coordinate with the team).
-* Use **CI enforcement (hooks/lint)** to validate branch names consistently. ([theadnanlab.com][4])
-
----
-
-## 🔄 Integrating Commits & Branches
-
-Aligning conventional commits with branch names increases clarity:
-
-* Branch `feature/login` → commits like `feat(login): …`.
-* Branch `bugfix/234-fix-header` → commits like `fix(header): …`.
-
-This **mapping enhances traceability** and improves automated release tools.
-
----
-
-## 🛠 Automation & Tooling
-
-Use automated tools to enforce conventions:
-
-* **Commit message linters** (e.g., `commitlint`).
-* **Branch name validators** (e.g., Git hooks, CI scripts).
-* **Semantic release tools** that parse commit history for versioning.
-
-Conventions make automation reliable and predictable.
-
----
-
-## 📚 Summary
-
-Following Conventional Commits and Conventional Branches ensures:
-
-* **Consistent commit and branch history**.
-* **Improved readability and collaboration**.
-* **Better tooling support** (automated versioning, changelogs, CI).
-* **Related semantic context** between code changes and branches.
-
-By adopting and enforcing these conventions, teams build a **clear, cohesive, and maintainable workflow**.
-
----
+Consistency is more important than perfection.
+Once adopted, these rules should be enforced across the team.
