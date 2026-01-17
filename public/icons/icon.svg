@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#197BBD;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#125E8A;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bgGradient)" filter="url(#shadow)"/>
+  
+  <!-- PSY symbol (Ψ) -->
+  <g transform="translate(256, 256)">
+    <!-- Main vertical line -->
+    <rect x="-12" y="-180" width="24" height="360" fill="white" rx="12"/>
+    
+    <!-- Left curved arm -->
+    <path d="M -12 -120 Q -80 -120 -80 -60 Q -80 0 -12 0" 
+          stroke="white" stroke-width="24" fill="none" stroke-linecap="round"/>
+    
+    <!-- Right curved arm -->
+    <path d="M 12 -120 Q 80 -120 80 -60 Q 80 0 12 0" 
+          stroke="white" stroke-width="24" fill="none" stroke-linecap="round"/>
+    
+    <!-- Bottom horizontal line -->
+    <rect x="-60" y="140" width="120" height="24" fill="white" rx="12"/>
+  </g>
+</svg>

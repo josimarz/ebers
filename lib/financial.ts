@@ -1,4 +1,5 @@
-import { prisma } from './prisma'
+import { eq, like, asc, count, sum, and } from 'drizzle-orm'
+import { getDbAsync, patients, consultations } from './db'
 
 // Types for financial operations
 export type PatientFinancialData = {
@@ -32,9 +33,6 @@ export type FinancialListResult = {
   hasPreviousPage: boolean
 }
 
-/**
- * Calculates age from birth date
- */
 function calculateAge(birthDate: Date): number {
   const today = new Date()
   const birth = new Date(birthDate)
@@ -48,20 +46,15 @@ function calculateAge(birthDate: Date): number {
   return age
 }
 
-/**
- * Gets financial overview for all patients with payment deficit calculations
- * Requirements: 7.1, 7.2, 7.3
- */
 export async function getFinancialOverview(options: FinancialListOptions = {}): Promise<FinancialListResult> {
   const {
     page = 1,
     limit = 10,
     sortBy = 'paymentDeficit',
-    sortOrder = 'desc', // Worst patients first by default (Requirement 7.3)
+    sortOrder = 'desc',
     search
   } = options
 
-  // Validate pagination parameters
   if (page < 1) {
     throw new Error('Página deve ser maior que 0')
   }
@@ -70,40 +63,35 @@ export async function getFinancialOverview(options: FinancialListOptions = {}): 
   }
 
   try {
-    // Build where clause for search
-    const where: any = search
-      ? {
-          name: {
-            contains: search
-          }
-        }
-      : {}
+    const db = await getDbAsync()
 
-    // Get patients with their consultation data
-    const patients = await prisma.patient.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        profilePhoto: true,
-        birthDate: true,
-        credits: true,
-        consultationPrice: true,
-        consultations: {
-          select: {
-            id: true,
-            paid: true
-          }
-        }
-      }
-    })
+    const whereClause = search
+      ? like(patients.name, `%${search}%`)
+      : undefined
 
-    // Calculate financial data for each patient
-    const patientsWithFinancialData: PatientFinancialData[] = patients.map(patient => {
-      const totalConsultations = patient.consultations.length
-      const paidConsultations = patient.consultations.filter(c => c.paid).length
+    const patientList = db
+      .select()
+      .from(patients)
+      .where(whereClause)
+      .all()
+
+    const patientsWithFinancialData: PatientFinancialData[] = patientList.map(patient => {
+      const totalResult = db
+        .select({ count: count() })
+        .from(consultations)
+        .where(eq(consultations.patientId, patient.id))
+        .get()
+      
+      const paidResult = db
+        .select({ count: count() })
+        .from(consultations)
+        .where(and(eq(consultations.patientId, patient.id), eq(consultations.paid, true)))
+        .get()
+
+      const totalConsultations = totalResult?.count ?? 0
+      const paidConsultations = paidResult?.count ?? 0
       const paymentDeficit = totalConsultations - paidConsultations
-      const hasPaymentIssues = paymentDeficit > 0 // Requirement 7.2
+      const hasPaymentIssues = paymentDeficit > 0
 
       return {
         id: patient.id,
@@ -116,11 +104,10 @@ export async function getFinancialOverview(options: FinancialListOptions = {}): 
         availableCredits: patient.credits,
         paymentDeficit,
         hasPaymentIssues,
-        consultationPrice: patient.consultationPrice ? Number(patient.consultationPrice) : null
+        consultationPrice: patient.consultationPrice
       }
     })
 
-    // Sort patients based on criteria
     let sortedPatients = [...patientsWithFinancialData]
     if (sortBy === 'paymentDeficit') {
       sortedPatients.sort((a, b) => {
@@ -134,7 +121,6 @@ export async function getFinancialOverview(options: FinancialListOptions = {}): 
       })
     }
 
-    // Apply pagination
     const totalCount = sortedPatients.length
     const totalPages = Math.ceil(totalCount / limit)
     const skip = (page - 1) * limit
@@ -156,40 +142,34 @@ export async function getFinancialOverview(options: FinancialListOptions = {}): 
   }
 }
 
-/**
- * Gets financial data for a specific patient
- * Requirements: 7.1, 7.2
- */
 export async function getPatientFinancialData(patientId: string): Promise<PatientFinancialData | null> {
   if (!patientId) {
     throw new Error('ID do paciente é obrigatório')
   }
 
   try {
-    const patient = await prisma.patient.findUnique({
-      where: { id: patientId },
-      select: {
-        id: true,
-        name: true,
-        profilePhoto: true,
-        birthDate: true,
-        credits: true,
-        consultationPrice: true,
-        consultations: {
-          select: {
-            id: true,
-            paid: true
-          }
-        }
-      }
-    })
+    const db = await getDbAsync()
+
+    const patient = db.select().from(patients).where(eq(patients.id, patientId)).get()
 
     if (!patient) {
       return null
     }
 
-    const totalConsultations = patient.consultations.length
-    const paidConsultations = patient.consultations.filter(c => c.paid).length
+    const totalResult = db
+      .select({ count: count() })
+      .from(consultations)
+      .where(eq(consultations.patientId, patientId))
+      .get()
+    
+    const paidResult = db
+      .select({ count: count() })
+      .from(consultations)
+      .where(and(eq(consultations.patientId, patientId), eq(consultations.paid, true)))
+      .get()
+
+    const totalConsultations = totalResult?.count ?? 0
+    const paidConsultations = paidResult?.count ?? 0
     const paymentDeficit = totalConsultations - paidConsultations
     const hasPaymentIssues = paymentDeficit > 0
 
@@ -204,7 +184,7 @@ export async function getPatientFinancialData(patientId: string): Promise<Patien
       availableCredits: patient.credits,
       paymentDeficit,
       hasPaymentIssues,
-      consultationPrice: patient.consultationPrice ? Number(patient.consultationPrice) : null
+      consultationPrice: patient.consultationPrice
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -214,9 +194,23 @@ export async function getPatientFinancialData(patientId: string): Promise<Patien
   }
 }
 
-/**
- * Gets financial statistics for dashboard
- */
+export async function getTotalRevenue(): Promise<number> {
+  try {
+    const db = await getDbAsync()
+
+    const result = db
+      .select({ total: sum(consultations.price) })
+      .from(consultations)
+      .where(eq(consultations.paid, true))
+      .get()
+
+    return Number(result?.total ?? 0)
+  } catch (error) {
+    console.error('Error calculating total revenue:', error)
+    throw new Error('Erro ao calcular receita total')
+  }
+}
+
 export async function getFinancialStats(): Promise<{
   totalPatients: number
   patientsWithPaymentIssues: number
@@ -224,39 +218,53 @@ export async function getFinancialStats(): Promise<{
   totalCreditsInSystem: number
 }> {
   try {
-    const [patients, unpaidConsultations, totalCredits] = await Promise.all([
-      prisma.patient.findMany({
-        select: {
-          credits: true,
-          consultations: {
-            select: {
-              paid: true
-            }
-          }
-        }
-      }),
-      prisma.consultation.count({
-        where: { paid: false }
-      }),
-      prisma.patient.aggregate({
-        _sum: {
-          credits: true
-        }
-      })
-    ])
+    const db = await getDbAsync()
 
-    const totalPatients = patients.length
-    const patientsWithPaymentIssues = patients.filter(patient => {
-      const totalConsultations = patient.consultations.length
-      const paidConsultations = patient.consultations.filter(c => c.paid).length
-      return totalConsultations > paidConsultations
-    }).length
+    const totalPatientsResult = db.select({ count: count() }).from(patients).get()
+    const totalPatients = totalPatientsResult?.count ?? 0
+
+    const unpaidConsultationsResult = db
+      .select({ count: count() })
+      .from(consultations)
+      .where(eq(consultations.paid, false))
+      .get()
+    const totalUnpaidConsultations = unpaidConsultationsResult?.count ?? 0
+
+    const totalCreditsResult = db
+      .select({ total: sum(patients.credits) })
+      .from(patients)
+      .get()
+    const totalCreditsInSystem = Number(totalCreditsResult?.total ?? 0)
+
+    const patientList = db.select().from(patients).all()
+    let patientsWithPaymentIssues = 0
+
+    for (const patient of patientList) {
+      const totalResult = db
+        .select({ count: count() })
+        .from(consultations)
+        .where(eq(consultations.patientId, patient.id))
+        .get()
+      
+      const paidResult = db
+        .select({ count: count() })
+        .from(consultations)
+        .where(and(eq(consultations.patientId, patient.id), eq(consultations.paid, true)))
+        .get()
+
+      const totalConsultations = totalResult?.count ?? 0
+      const paidConsultations = paidResult?.count ?? 0
+
+      if (totalConsultations > paidConsultations) {
+        patientsWithPaymentIssues++
+      }
+    }
 
     return {
       totalPatients,
       patientsWithPaymentIssues,
-      totalUnpaidConsultations: unpaidConsultations,
-      totalCreditsInSystem: totalCredits._sum.credits || 0
+      totalUnpaidConsultations,
+      totalCreditsInSystem
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -266,33 +274,23 @@ export async function getFinancialStats(): Promise<{
   }
 }
 
-/**
- * Searches patients for financial filtering (autocomplete functionality)
- * Requirements: 7.4
- */
 export async function searchPatientsForFinancial(query: string, limit: number = 10): Promise<{ id: string; name: string }[]> {
   if (!query || query.trim().length < 2) {
     return []
   }
 
   try {
-    const patients = await prisma.patient.findMany({
-      where: {
-        name: {
-          contains: query.trim()
-        }
-      },
-      select: {
-        id: true,
-        name: true
-      },
-      orderBy: {
-        name: 'asc'
-      },
-      take: limit
-    })
+    const db = await getDbAsync()
 
-    return patients
+    const result = db
+      .select({ id: patients.id, name: patients.name })
+      .from(patients)
+      .where(like(patients.name, `%${query.trim()}%`))
+      .orderBy(asc(patients.name))
+      .limit(limit)
+      .all()
+
+    return result
   } catch (error: unknown) {
     if (error instanceof Error) {
       throw new Error(`Erro ao buscar pacientes: ${error.message}`)

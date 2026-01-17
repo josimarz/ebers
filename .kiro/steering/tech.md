@@ -23,7 +23,7 @@ Será usado como banco de dados a útlima versão estável (LTS) do SQLite.
 
 ### ORM
 
-O ORM utilizado no projeto será o [Prisma](https://www.prisma.io/).
+O ORM utilizado no projeto será o [Drizzle ORM](https://orm.drizzle.team/) com [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) para melhor compatibilidade com distribuição via Electron.
 
 ## Frontend/Backend
 

@@ -108,7 +108,7 @@ export function ConsultationHistoryPagination({
                 onClick={() => navigateToPage(page)}
                 className={`px-3 py-2 text-sm font-medium rounded-lg ${
                   isCurrentPage
-                    ? 'bg-primary text-white'
+                    ? 'bg-primary-500 text-white'
                     : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
                 }`}
               >

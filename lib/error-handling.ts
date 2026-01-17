@@ -146,22 +146,22 @@ export function handleApiError(error: unknown): {
     }
   }
 
-  // Handle Prisma errors
+  // Handle SQLite/Drizzle errors
   if (error && typeof error === 'object' && 'code' in error) {
-    const prismaError = error as any
+    const dbError = error as { code: string }
     
-    switch (prismaError.code) {
-      case 'P2002':
+    switch (dbError.code) {
+      case 'SQLITE_CONSTRAINT_UNIQUE':
         return {
           message: 'Já existe um registro com essas informações.',
           statusCode: 409
         }
-      case 'P2003':
+      case 'SQLITE_CONSTRAINT_FOREIGNKEY':
         return {
           message: 'Não é possível realizar esta operação devido a dependências.',
           statusCode: 400
         }
-      case 'P2025':
+      case 'SQLITE_NOTFOUND':
         return {
           message: 'Registro não encontrado.',
           statusCode: 404

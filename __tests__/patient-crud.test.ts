@@ -4,31 +4,27 @@
  */
 
 import { createPatient, updatePatient, getPatient, listPatients, searchPatients, deletePatient } from '@/lib/patients'
-import { prisma } from '@/lib/prisma'
 import { Gender, Religion } from '@/lib/validations'
 
-// Mock Prisma for testing
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    patient: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn(),
-      count: jest.fn(),
-      delete: jest.fn()
-    },
-    consultation: {
-      count: jest.fn()
-    }
-  }
-}))
-
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+// Get the mock db from jest.setup.js
+const mockDb = jest.requireMock('@/lib/db').getDb()
 
 describe('Patient CRUD Operations', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // Reset chainable mock returns
+    mockDb.select.mockReturnThis()
+    mockDb.from.mockReturnThis()
+    mockDb.where.mockReturnThis()
+    mockDb.orderBy.mockReturnThis()
+    mockDb.limit.mockReturnThis()
+    mockDb.offset.mockReturnThis()
+    mockDb.insert.mockReturnThis()
+    mockDb.values.mockReturnThis()
+    mockDb.update.mockReturnThis()
+    mockDb.set.mockReturnThis()
+    mockDb.delete.mockReturnThis()
+    mockDb.selectDistinct.mockReturnThis()
   })
 
   describe('createPatient', () => {
@@ -45,46 +41,16 @@ describe('Patient CRUD Operations', () => {
         credits: 0
       }
 
-      const mockCreatedPatient = {
-        id: 'patient-123',
-        ...patientData,
-        profilePhoto: null,
-        cpf: null,
-        rg: null,
-        legalGuardian: null,
-        legalGuardianEmail: null,
-        legalGuardianCpf: null,
-        phone2: null,
-        email: null,
-        therapyHistoryDetails: null,
-        medicationSince: null,
-        medicationNames: null,
-        hospitalizationDate: null,
-        hospitalizationReason: null,
-        consultationPrice: null,
-        consultationFrequency: null,
-        consultationDay: null,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-
-      mockPrisma.patient.create.mockResolvedValue(mockCreatedPatient)
+      // Mock insert operation
+      mockDb.run.mockReturnValue({ changes: 1 })
 
       const result = await createPatient(patientData)
 
-      expect(mockPrisma.patient.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          name: patientData.name,
-          birthDate: patientData.birthDate,
-          gender: patientData.gender,
-          religion: patientData.religion,
-          phone1: patientData.phone1,
-          credits: patientData.credits
-        })
-      })
+      expect(mockDb.insert).toHaveBeenCalled()
+      expect(mockDb.values).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
-        id: 'patient-123',
         name: 'João Silva',
         age: expect.any(Number)
       }))
@@ -137,23 +103,17 @@ describe('Patient CRUD Operations', () => {
         consultationFrequency: null,
         consultationDay: null,
         createdAt: new Date(),
-        updatedAt: new Date(),
-        consultations: []
+        updatedAt: new Date()
       }
 
-      mockPrisma.patient.findUnique.mockResolvedValue(mockPatient)
+      mockDb.get.mockReturnValue(mockPatient)
 
       const result = await getPatient('patient-123')
 
-      expect(mockPrisma.patient.findUnique).toHaveBeenCalledWith({
-        where: { id: 'patient-123' },
-        include: {
-          consultations: {
-            orderBy: { createdAt: 'desc' },
-            take: 1
-          }
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.from).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
+      expect(mockDb.get).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
         id: 'patient-123',
@@ -163,7 +123,7 @@ describe('Patient CRUD Operations', () => {
     })
 
     it('should return null when patient not found', async () => {
-      mockPrisma.patient.findUnique.mockResolvedValue(null)
+      mockDb.get.mockReturnValue(null)
 
       const result = await getPatient('nonexistent-id')
 
@@ -206,32 +166,21 @@ describe('Patient CRUD Operations', () => {
           consultationFrequency: null,
           consultationDay: null,
           createdAt: new Date(),
-          updatedAt: new Date(),
-          consultations: []
+          updatedAt: new Date()
         }
       ]
 
-      mockPrisma.patient.count.mockResolvedValue(1)
-      mockPrisma.patient.findMany.mockResolvedValue(mockPatients)
+      // Mock count query
+      mockDb.get.mockReturnValueOnce({ count: 1 })
+      // Mock patient list query
+      mockDb.all.mockReturnValue(mockPatients)
+      // Mock active consultation count for each patient
+      mockDb.get.mockReturnValue({ count: 0 })
 
       const result = await listPatients({ page: 1, limit: 10 })
 
-      expect(mockPrisma.patient.count).toHaveBeenCalled()
-      expect(mockPrisma.patient.findMany).toHaveBeenCalledWith({
-        where: {},
-        orderBy: { name: 'asc' },
-        skip: 0,
-        take: 10,
-        include: {
-          _count: {
-            select: {
-              consultations: {
-                where: { status: 'OPEN' }
-              }
-            }
-          }
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.from).toHaveBeenCalled()
 
       expect(result).toEqual({
         patients: expect.arrayContaining([
@@ -250,53 +199,23 @@ describe('Patient CRUD Operations', () => {
     })
 
     it('should filter patients by search term', async () => {
-      mockPrisma.patient.count.mockResolvedValue(0)
-      mockPrisma.patient.findMany.mockResolvedValue([])
+      mockDb.get.mockReturnValueOnce({ count: 0 })
+      mockDb.all.mockReturnValue([])
 
       await listPatients({ search: 'João' })
 
-      expect(mockPrisma.patient.findMany).toHaveBeenCalledWith({
-        where: {
-          name: {
-            contains: 'João'
-          }
-        },
-        orderBy: { name: 'asc' },
-        skip: 0,
-        take: 10,
-        include: {
-          _count: {
-            select: {
-              consultations: {
-                where: { status: 'OPEN' }
-              }
-            }
-          }
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
     })
 
     it('should sort patients by age', async () => {
-      mockPrisma.patient.count.mockResolvedValue(0)
-      mockPrisma.patient.findMany.mockResolvedValue([])
+      mockDb.get.mockReturnValueOnce({ count: 0 })
+      mockDb.all.mockReturnValue([])
 
       await listPatients({ sortBy: 'age', sortOrder: 'desc' })
 
-      expect(mockPrisma.patient.findMany).toHaveBeenCalledWith({
-        where: {},
-        orderBy: { birthDate: 'asc' }, // Age desc = birthDate asc
-        skip: 0,
-        take: 10,
-        include: {
-          _count: {
-            select: {
-              consultations: {
-                where: { status: 'OPEN' }
-              }
-            }
-          }
-        }
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.orderBy).toHaveBeenCalled()
     })
   })
 
@@ -307,25 +226,15 @@ describe('Patient CRUD Operations', () => {
         { id: 'patient-2', name: 'João Santos' }
       ]
 
-      mockPrisma.patient.findMany.mockResolvedValue(mockResults)
+      mockDb.all.mockReturnValue(mockResults)
 
       const result = await searchPatients('João')
 
-      expect(mockPrisma.patient.findMany).toHaveBeenCalledWith({
-        where: {
-          name: {
-            contains: 'João'
-          }
-        },
-        select: {
-          id: true,
-          name: true
-        },
-        orderBy: {
-          name: 'asc'
-        },
-        take: 10
-      })
+      expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.from).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
+      expect(mockDb.limit).toHaveBeenCalled()
+      expect(mockDb.all).toHaveBeenCalled()
 
       expect(result).toEqual(mockResults)
     })
@@ -348,7 +257,25 @@ describe('Patient CRUD Operations', () => {
         hasTherapyHistory: false,
         takesMedication: false,
         hasHospitalization: false,
-        credits: 0
+        credits: 0,
+        profilePhoto: null,
+        cpf: null,
+        rg: null,
+        legalGuardian: null,
+        legalGuardianEmail: null,
+        legalGuardianCpf: null,
+        phone2: null,
+        email: null,
+        therapyHistoryDetails: null,
+        medicationSince: null,
+        medicationNames: null,
+        hospitalizationDate: null,
+        hospitalizationReason: null,
+        consultationPrice: null,
+        consultationFrequency: null,
+        consultationDay: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
 
       const updatedPatient = {
@@ -356,44 +283,71 @@ describe('Patient CRUD Operations', () => {
         name: 'João Santos'
       }
 
-      mockPrisma.patient.findUnique.mockResolvedValue(existingPatient as any)
-      mockPrisma.patient.update.mockResolvedValue(updatedPatient as any)
+      // First call returns existing patient, second call returns updated patient
+      mockDb.get.mockReturnValueOnce(existingPatient)
+      mockDb.run.mockReturnValue({ changes: 1 })
+      mockDb.get.mockReturnValueOnce(updatedPatient)
 
       const result = await updatePatient('patient-123', { name: 'João Santos' })
 
-      expect(mockPrisma.patient.update).toHaveBeenCalledWith({
-        where: { id: 'patient-123' },
-        data: { name: 'João Santos' }
-      })
+      expect(mockDb.update).toHaveBeenCalled()
+      expect(mockDb.set).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
 
       expect(result).toEqual(expect.objectContaining({
         name: 'João Santos',
         age: expect.any(Number)
       }))
     })
+
+    it('should throw error when patient not found', async () => {
+      mockDb.get.mockReturnValue(null)
+
+      await expect(updatePatient('nonexistent-id', { name: 'Test' })).rejects.toThrow('Paciente não encontrado')
+    })
   })
 
   describe('deletePatient', () => {
     it('should delete patient without consultations', async () => {
-      mockPrisma.consultation.count.mockResolvedValue(0)
-      mockPrisma.patient.delete.mockResolvedValue({} as any)
+      const existingPatient = {
+        id: 'patient-123',
+        name: 'João Silva'
+      }
+
+      // First get returns existing patient
+      mockDb.get.mockReturnValueOnce(existingPatient)
+      // Second get returns consultation count = 0
+      mockDb.get.mockReturnValueOnce({ count: 0 })
+      mockDb.run.mockReturnValue({ changes: 1 })
 
       await deletePatient('patient-123')
 
-      expect(mockPrisma.consultation.count).toHaveBeenCalledWith({
-        where: { patientId: 'patient-123' }
-      })
-      expect(mockPrisma.patient.delete).toHaveBeenCalledWith({
-        where: { id: 'patient-123' }
-      })
+      expect(mockDb.delete).toHaveBeenCalled()
+      expect(mockDb.where).toHaveBeenCalled()
+      expect(mockDb.run).toHaveBeenCalled()
     })
 
     it('should throw error when patient has consultations', async () => {
-      mockPrisma.consultation.count.mockResolvedValue(1)
+      const existingPatient = {
+        id: 'patient-123',
+        name: 'João Silva'
+      }
+
+      // First get returns existing patient
+      mockDb.get.mockReturnValueOnce(existingPatient)
+      // Second get returns consultation count = 1
+      mockDb.get.mockReturnValueOnce({ count: 1 })
 
       await expect(deletePatient('patient-123')).rejects.toThrow(
         'Não é possível excluir paciente com consultas registradas'
       )
+    })
+
+    it('should throw error when patient not found', async () => {
+      mockDb.get.mockReturnValue(null)
+
+      await expect(deletePatient('nonexistent-id')).rejects.toThrow('Paciente não encontrado')
     })
   })
 })

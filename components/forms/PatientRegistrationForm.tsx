@@ -49,6 +49,7 @@ interface PatientFormData {
   consultationPrice?: number;
   consultationFrequency?: string;
   consultationDay?: string;
+  credits?: number;
 }
 
 const genderOptions = [
@@ -130,7 +131,24 @@ export default function PatientRegistrationForm({
         ...formData,
         // Handle birthDate properly - if empty string, leave as empty string for validation
         birthDate: formData.birthDate || '',
-        consultationPrice: formData.consultationPrice ? Number(formData.consultationPrice) : undefined
+        consultationPrice: formData.consultationPrice ? Number(formData.consultationPrice) : undefined,
+        credits: formData.credits ?? 0,
+        // Handle empty optional strings - convert to undefined
+        profilePhoto: formData.profilePhoto || undefined,
+        cpf: formData.cpf || undefined,
+        rg: formData.rg || undefined,
+        legalGuardian: formData.legalGuardian || undefined,
+        legalGuardianEmail: formData.legalGuardianEmail || undefined,
+        legalGuardianCpf: formData.legalGuardianCpf || undefined,
+        phone2: formData.phone2 || undefined,
+        email: formData.email || undefined,
+        therapyHistoryDetails: formData.therapyHistoryDetails || undefined,
+        medicationSince: formData.medicationSince || undefined,
+        medicationNames: formData.medicationNames || undefined,
+        hospitalizationDate: formData.hospitalizationDate || undefined,
+        hospitalizationReason: formData.hospitalizationReason || undefined,
+        consultationFrequency: formData.consultationFrequency || undefined,
+        consultationDay: formData.consultationDay || undefined
       };
 
       // Use appropriate schema based on device type
@@ -139,10 +157,11 @@ export default function PatientRegistrationForm({
       
       setErrors({});
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error && typeof error === 'object' && 'issues' in error) {
-        const formattedErrors = formatValidationErrors(error);
+        const formattedErrors = formatValidationErrors(error as import('zod').ZodError);
         setErrors(formattedErrors);
+        console.error('Validation errors:', formattedErrors);
       }
       return false;
     }
@@ -261,7 +280,7 @@ export default function PatientRegistrationForm({
             />
             <label 
               htmlFor="photo-upload"
-              className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-2 cursor-pointer hover:bg-secondary transition-colors"
+              className="absolute bottom-0 right-0 bg-primary-500 text-white rounded-full p-2 cursor-pointer hover:bg-secondary-500 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
