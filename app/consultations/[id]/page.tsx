@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { PatientPhoto, RichTextEditor } from '@/components/ui';
+import { PatientPhoto, RichTextEditor, MicrophoneButton } from '@/components/ui';
+import { useDeviceDetection } from '@/lib/hooks/useDeviceDetection';
+import { useSpeechRecognition } from '@/lib/hooks/useSpeechRecognition';
 
 type Patient = {
   id: string;
@@ -32,6 +34,7 @@ export default function ConsultationPage() {
   const params = useParams();
   const router = useRouter();
   const consultationId = params.id as string;
+  const { isElectron } = useDeviceDetection();
 
   const [consultation, setConsultation] = useState<Consultation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +42,38 @@ export default function ConsultationPage() {
   const [saving, setSaving] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [timerColor, setTimerColor] = useState<TimerColor>('green');
+
+  // Callback para quando texto é transcrito
+  const handleTranscript = useCallback((text: string) => {
+    if (!consultation || consultation.status === 'FINALIZED') return;
+    
+    // Adicionar texto transcrito ao conteúdo
+    setConsultation(prev => {
+      if (!prev) return null;
+      const newContent = prev.content 
+        ? prev.content + text 
+        : text;
+      return { ...prev, content: newContent };
+    });
+  }, [consultation?.status]);
+
+  const {
+    isListening,
+    isSupported,
+    error: speechError,
+    toggleListening,
+  } = useSpeechRecognition(handleTranscript);
+
+  // Abrir consulta no navegador (para Electron)
+  const handleOpenInBrowser = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    
+    const electronAPI = (window as Window & { electronAPI?: { openInBrowser: (url: string) => Promise<{ success: boolean }> } }).electronAPI;
+    if (electronAPI?.openInBrowser) {
+      const url = `http://localhost:3000/consultations/${consultationId}`;
+      await electronAPI.openInBrowser(url);
+    }
+  }, [consultationId]);
 
   // Load consultation data
   useEffect(() => {
@@ -246,6 +281,18 @@ export default function ConsultationPage() {
             <div className={`px-6 py-3 rounded-lg border-2 font-mono text-xl font-bold ${timerColorClasses[timerColor]}`}>
               {formatTime(elapsedTime)}
             </div>
+
+            {/* Microphone Button for Voice Transcription */}
+            {consultation.status === 'OPEN' && (
+              <MicrophoneButton
+                isListening={isListening}
+                isSupported={isSupported}
+                disabled={consultation.status === 'FINALIZED'}
+                error={speechError}
+                onToggle={toggleListening}
+                onOpenInBrowser={handleOpenInBrowser}
+              />
+            )}
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-2">
