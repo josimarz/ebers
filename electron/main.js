@@ -255,6 +255,20 @@ electron_1.ipcMain.handle('select-folder', async () => {
     }
     return { canceled: true };
 });
+// Handler para abrir URL no navegador padrão
+electron_1.ipcMain.handle('open-in-browser', async (_event, url) => {
+    try {
+        await electron_1.shell.openExternal(url);
+        return { success: true };
+    }
+    catch (error) {
+        console.error('Erro ao abrir URL no navegador:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Erro desconhecido',
+        };
+    }
+});
 // Handler para criação de backup
 electron_1.ipcMain.handle('create-backup', async (_event, destinationPath) => {
     try {

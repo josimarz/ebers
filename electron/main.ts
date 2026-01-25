@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import { join } from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { existsSync, mkdirSync, copyFileSync } from 'fs';
@@ -297,6 +297,20 @@ ipcMain.handle('select-folder', async () => {
     return { canceled: true };
   }
   return { canceled: true };
+});
+
+// Handler para abrir URL no navegador padrão
+ipcMain.handle('open-in-browser', async (_event, url: string) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao abrir URL no navegador:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    };
+  }
 });
 
 // Handler para criação de backup
