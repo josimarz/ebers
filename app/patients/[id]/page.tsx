@@ -21,6 +21,7 @@ interface PatientData {
   email?: string;
   hasTherapyHistory: boolean;
   therapyHistoryDetails?: string;
+  therapyReason?: string;
   takesMedication: boolean;
   medicationSince?: string;
   medicationNames?: string;

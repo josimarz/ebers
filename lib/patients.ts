@@ -20,6 +20,7 @@ export type PatientWithAge = {
   email: string | null
   hasTherapyHistory: boolean
   therapyHistoryDetails: string | null
+  therapyReason: string | null
   takesMedication: boolean
   medicationSince: string | null
   medicationNames: string | null
@@ -119,6 +120,7 @@ export async function createPatient(data: PatientInput): Promise<PatientWithAge>
       email: validation.data.email || null,
       hasTherapyHistory: validation.data.hasTherapyHistory,
       therapyHistoryDetails: validation.data.therapyHistoryDetails || null,
+      therapyReason: validation.data.therapyReason || null,
       takesMedication: validation.data.takesMedication,
       medicationSince: validation.data.medicationSince || null,
       medicationNames: validation.data.medicationNames || null,

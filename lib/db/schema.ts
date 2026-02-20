@@ -19,6 +19,7 @@ export const patients = sqliteTable('Patient', {
   email: text('email'),
   hasTherapyHistory: integer('hasTherapyHistory', { mode: 'boolean' }).notNull(),
   therapyHistoryDetails: text('therapyHistoryDetails'),
+  therapyReason: text('therapyReason'),
   takesMedication: integer('takesMedication', { mode: 'boolean' }).notNull(),
   medicationSince: text('medicationSince'),
   medicationNames: text('medicationNames'),

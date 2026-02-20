@@ -287,6 +287,7 @@ export const PatientUpdateSchema = z.object({
   phone2: z.string().max(20, 'Telefone muito longo').nullable().optional(),
   email: z.string().email('Email inválido').nullable().optional(),
   therapyHistoryDetails: z.string().max(1000, 'Detalhes muito longos').nullable().optional(),
+  therapyReason: z.string().max(1000, 'Motivo muito longo').nullable().optional(),
   medicationSince: z.string().max(100, 'Texto muito longo').nullable().optional(),
   medicationNames: z.string().max(500, 'Lista de medicamentos muito longa').nullable().optional(),
   hospitalizationDate: z.string().max(100, 'Data muito longa').nullable().optional(),

@@ -47,6 +47,8 @@ export default function ConsultationPage() {
 
   // Ref para rastrear mudanças pendentes
   const pendingChangesRef = useRef<{ content?: string; notes?: string }>({});
+  const consultationIdRef = useRef(consultationId);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Callback para quando texto é transcrito
   const handleTranscript = useCallback((text: string) => {

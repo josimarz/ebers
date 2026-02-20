@@ -67,6 +67,8 @@ export async function getDbAsync() {
     if (existsSync(dbPath)) {
       const buffer = readFileSync(dbPath)
       sqliteInstance = new SqlJs.Database(buffer)
+      // Run migrations for existing databases
+      runMigrations(sqliteInstance)
     } else {
       sqliteInstance = new SqlJs.Database()
       // Initialize schema
@@ -127,8 +129,20 @@ export function closeDb(): void {
   }
 }
 
-function initializeSchema(db: SqlJsDatabase): void {
-  // Create Patient table
+function runMigrations(db: SqlJsDatabase): void {
+  // Add therapyReason column if it doesn't exist (migration)
+  try {
+    const cols = db.exec("PRAGMA table_info(Patient)")
+    const colNames = cols[0]?.values.map((row) => row[1] as string) ?? []
+    if (!colNames.includes('therapyReason')) {
+      db.run('ALTER TABLE Patient ADD COLUMN therapyReason TEXT')
+    }
+  } catch {
+    // Table may not exist yet; initializeSchema will handle it
+  }
+}
+
+function initializeSchema(db: SqlJsDatabase): void {  // Create Patient table
   db.run(`
     CREATE TABLE IF NOT EXISTS Patient (
       id TEXT PRIMARY KEY,
@@ -147,6 +161,7 @@ function initializeSchema(db: SqlJsDatabase): void {
       email TEXT,
       hasTherapyHistory INTEGER NOT NULL,
       therapyHistoryDetails TEXT,
+      therapyReason TEXT,
       takesMedication INTEGER NOT NULL,
       medicationSince TEXT,
       medicationNames TEXT,
