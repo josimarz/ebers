@@ -10,9 +10,10 @@ interface QRCodeModalProps {
   onClose: () => void;
   addresses: string[];
   port: number;
+  path?: string;
 }
 
-export function QRCodeModal({ isOpen, onClose, addresses, port }: QRCodeModalProps) {
+export function QRCodeModal({ isOpen, onClose, addresses, port, path = '' }: QRCodeModalProps) {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<string>('');
@@ -25,7 +26,7 @@ export function QRCodeModal({ isOpen, onClose, addresses, port }: QRCodeModalPro
 
   useEffect(() => {
     if (selectedAddress && isOpen) {
-      const url = `http://${selectedAddress}:${port}`;
+      const url = `http://${selectedAddress}:${port}${path}`;
       QRCode.toDataURL(url, {
         width: 256,
         margin: 2,

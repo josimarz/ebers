@@ -18,6 +18,12 @@ export function proxy(request: NextRequest) {
     ) {
       return NextResponse.next()
     }
+
+    // Allow access to patient edit page (e.g. scanned from QR code on edit page)
+    const patientEditMatch = /^\/patients\/[^/]+$/.test(pathname)
+    if (patientEditMatch) {
+      return NextResponse.next()
+    }
     
     // Redirect all other paths to patient registration form
     const url = new URL('/patients/new', request.url)
