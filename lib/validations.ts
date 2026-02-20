@@ -124,12 +124,14 @@ export const PatientSchema = z.object({
   takesMedication: z.boolean(),
   hasHospitalization: z.boolean(),
 
+  // Required document field
+  cpf: z.string().min(1, 'CPF é obrigatório').max(14, 'CPF muito longo').transform(sanitizeDocument).refine(val => val.length > 0, 'CPF é obrigatório'),
+
   // Optional fields (Requirements 1.2)
   profilePhoto: z.string().transform(sanitizeUrl).refine(
     (val) => !val || val.startsWith('data:image/') || val.startsWith('http://') || val.startsWith('https://'),
     'URL da foto inválida'
   ).optional(),
-  cpf: z.string().max(14, 'CPF muito longo').transform(sanitizeDocument).optional(),
   rg: z.string().max(20, 'RG muito longo').transform(sanitizeDocument).optional(),
   legalGuardian: z.string().max(255, 'Nome do responsável muito longo').transform(sanitizeName).optional(),
   legalGuardianEmail: OptionalEmail,
@@ -137,6 +139,7 @@ export const PatientSchema = z.object({
   phone2: z.string().max(20, 'Telefone muito longo').transform(sanitizePhone).optional(),
   email: OptionalEmail,
   therapyHistoryDetails: z.string().max(1000, 'Detalhes muito longos').transform(sanitizeText).optional(),
+  therapyReason: z.string().max(1000, 'Motivo muito longo').transform(sanitizeText).optional(),
   medicationSince: z.string().max(100, 'Texto muito longo').transform(sanitizeText).optional(),
   medicationNames: z.string().max(500, 'Lista de medicamentos muito longa').transform(sanitizeText).optional(),
   hospitalizationDate: z.string().max(100, 'Data muito longa').transform(sanitizeText).optional(),
@@ -185,12 +188,14 @@ export const PatientIpadSchema = z.object({
   takesMedication: z.boolean(),
   hasHospitalization: z.boolean(),
 
+  // Required document field
+  cpf: z.string().min(1, 'CPF é obrigatório').max(14, 'CPF muito longo').transform(sanitizeDocument).refine(val => val.length > 0, 'CPF é obrigatório'),
+
   // Optional fields (Requirements 1.2) - excluding iPad-restricted fields
   profilePhoto: z.string().transform(sanitizeUrl).refine(
     (val) => !val || val.startsWith('data:image/') || val.startsWith('http://') || val.startsWith('https://'),
     'URL da foto inválida'
   ).optional(),
-  cpf: z.string().max(14, 'CPF muito longo').transform(sanitizeDocument).optional(),
   rg: z.string().max(20, 'RG muito longo').transform(sanitizeDocument).optional(),
   legalGuardian: z.string().max(255, 'Nome do responsável muito longo').transform(sanitizeName).optional(),
   legalGuardianEmail: OptionalEmail,
@@ -198,6 +203,7 @@ export const PatientIpadSchema = z.object({
   phone2: z.string().max(20, 'Telefone muito longo').transform(sanitizePhone).optional(),
   email: OptionalEmail,
   therapyHistoryDetails: z.string().max(1000, 'Detalhes muito longos').transform(sanitizeText).optional(),
+  therapyReason: z.string().max(1000, 'Motivo muito longo').transform(sanitizeText).optional(),
   medicationSince: z.string().max(100, 'Texto muito longo').transform(sanitizeText).optional(),
   medicationNames: z.string().max(500, 'Lista de medicamentos muito longa').transform(sanitizeText).optional(),
   hospitalizationDate: z.string().max(100, 'Data muito longa').transform(sanitizeText).optional(),

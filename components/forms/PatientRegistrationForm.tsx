@@ -29,7 +29,7 @@ interface PatientFormData {
   profilePhoto?: string;
   birthDate: string;
   gender: string;
-  cpf?: string;
+  cpf: string;
   rg?: string;
   religion: string;
   legalGuardian?: string;
@@ -40,6 +40,7 @@ interface PatientFormData {
   email?: string;
   hasTherapyHistory: boolean;
   therapyHistoryDetails?: string;
+  therapyReason?: string;
   takesMedication: boolean;
   medicationSince?: string;
   medicationNames?: string;
@@ -143,6 +144,7 @@ export default function PatientRegistrationForm({
         phone2: formData.phone2 || undefined,
         email: formData.email || undefined,
         therapyHistoryDetails: formData.therapyHistoryDetails || undefined,
+        therapyReason: formData.therapyReason || undefined,
         medicationSince: formData.medicationSince || undefined,
         medicationNames: formData.medicationNames || undefined,
         hospitalizationDate: formData.hospitalizationDate || undefined,
@@ -404,7 +406,7 @@ export default function PatientRegistrationForm({
           <div>
             <MaskedInput
               mask="cpf"
-              label="CPF"
+              label="CPF *"
               value={formData.cpf || ''}
               onChange={(maskedValue, rawValue) => handleInputChange('cpf', rawValue)}
               error={errors.cpf}
@@ -542,6 +544,20 @@ export default function PatientRegistrationForm({
                 />
               </div>
             )}
+
+            <div>
+              <label htmlFor="therapyReason" className="block text-sm font-medium text-gray-700 mb-2">
+                Motivo de estar fazendo terapia
+              </label>
+              <textarea
+                id="therapyReason"
+                value={formData.therapyReason || ''}
+                onChange={(e) => handleInputChange('therapyReason', e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                placeholder="Descreva o motivo pelo qual está buscando terapia"
+              />
+            </div>
           </div>
 
           {/* Medication */}
