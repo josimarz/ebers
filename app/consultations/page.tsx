@@ -7,6 +7,10 @@ export const metadata = {
   description: 'Visualize e gerencie o histórico de consultas dos pacientes'
 }
 
+// Desabilitar cache para sempre mostrar dados atualizados
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 type SearchParams = {
   page?: string
   patientId?: string

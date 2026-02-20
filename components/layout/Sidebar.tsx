@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   Users, 
   Calendar, 
@@ -56,6 +56,12 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleNavigation = (href: string) => {
+    router.push(href);
+    router.refresh();
+  };
 
   return (
     <div className="flex h-full w-64 flex-col bg-gradient-to-b from-primary-500 to-secondary-500 shadow-2xl">
@@ -76,11 +82,11 @@ export default function Sidebar() {
           const Icon = item.icon;
           
           return (
-            <Link
+            <button
               key={item.name}
-              href={item.href as any}
+              onClick={() => handleNavigation(item.href)}
               className={`
-                group flex items-center rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 ease-in-out
+                w-full group flex items-center rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 ease-in-out
                 ${
                   isActive
                     ? 'bg-secondary-500 text-white shadow-lg backdrop-blur-sm transform scale-105'
@@ -98,7 +104,7 @@ export default function Sidebar() {
               {isActive && (
                 <div className="ml-auto h-2 w-2 rounded-full bg-white/60 animate-pulse" />
               )}
-            </Link>
+            </button>
           );
         })}
       </nav>

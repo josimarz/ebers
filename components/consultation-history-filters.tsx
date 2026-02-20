@@ -107,6 +107,7 @@ export function ConsultationHistoryFilters({
     params.delete('page')
     
     router.push(`/consultations?${params.toString()}`)
+    router.refresh()
   }
 
   return (

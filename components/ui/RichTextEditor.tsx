@@ -42,7 +42,7 @@ export function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[300px] p-4',
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none',
         'data-placeholder': placeholder,
       },
     },
@@ -65,17 +65,20 @@ export function RichTextEditor({
   // Don't render editor until component is mounted (prevents SSR issues)
   if (!isMounted || !editor) {
     return (
-      <div className={`border border-gray-300 rounded-lg p-4 min-h-[400px] bg-gray-50 ${className}`}>
+      <div className={`border border-gray-300 rounded-lg p-4 bg-gray-50 ${className}`} style={{ height: '400px' }}>
         <div className="text-gray-500">Carregando editor...</div>
       </div>
     );
   }
 
   return (
-    <div className={`border border-gray-300 rounded-lg overflow-hidden ${disabled ? 'bg-gray-50' : 'bg-white'} ${className}`}>
+    <div 
+      className={`border border-gray-300 rounded-lg flex flex-col ${disabled ? 'bg-gray-50' : 'bg-white'} ${className}`}
+      style={{ height: '400px' }}
+    >
       {/* Toolbar */}
       {!disabled && (
-        <div className="border-b border-gray-300 p-3 bg-gray-50 flex flex-wrap gap-2">
+        <div className="border-b border-gray-300 p-3 bg-gray-50 flex flex-wrap gap-2 shrink-0">
           {/* Text formatting */}
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -208,10 +211,10 @@ export function RichTextEditor({
       )}
 
       {/* Editor Content */}
-      <div className="relative min-h-[300px]">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <EditorContent 
           editor={editor} 
-          className={disabled ? 'opacity-60' : ''}
+          className={`h-full ${disabled ? 'opacity-60' : ''}`}
         />
       </div>
     </div>

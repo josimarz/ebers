@@ -118,18 +118,17 @@
 /* Tiptap Editor */
 .ProseMirror {
   outline: none;
-  padding: 1.5rem;
-  min-height: 300px;
-  border-radius: 0.75rem;
+  padding: 1rem;
+  height: 100%;
+  border-radius: 0;
   background: #fafafa;
-  border: 2px solid #e5e7eb;
+  border: none;
   transition: all 0.2s ease;
   position: relative;
 }
 
 .ProseMirror:focus {
-  border-color: #197BBD;
-  box-shadow: 0 0 0 4px rgba(25, 123, 189, 0.1);
+  box-shadow: none;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {
@@ -159,3 +158,8 @@
 .ProseMirror strong { font-weight: 700; color: #1f2937; }
 .ProseMirror em { font-style: italic; }
 .ProseMirror s { text-decoration: line-through; }
+
+/* Tiptap Editor Container - ensure EditorContent fills parent */
+.tiptap {
+  height: 100%;
+}

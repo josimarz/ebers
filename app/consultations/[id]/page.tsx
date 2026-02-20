@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PatientPhoto, RichTextEditor, MicrophoneButton } from '@/components/ui';
 import { useDeviceDetection } from '@/lib/hooks/useDeviceDetection';
@@ -42,6 +42,11 @@ export default function ConsultationPage() {
   const [saving, setSaving] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [timerColor, setTimerColor] = useState<TimerColor>('green');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Ref para rastrear mudanças pendentes
+  const pendingChangesRef = useRef<{ content?: string; notes?: string }>({});
 
   // Callback para quando texto é transcrito
   const handleTranscript = useCallback((text: string) => {
@@ -137,7 +142,7 @@ export default function ConsultationPage() {
   };
 
   // Auto-save content and notes
-  const saveConsultation = async (updates: Partial<Consultation>) => {
+  const saveConsultation = useCallback(async (updates: Partial<Consultation>) => {
     if (!consultation) return;
 
     try {
@@ -156,25 +161,49 @@ export default function ConsultationPage() {
 
       const updatedConsultation = await response.json();
       setConsultation(updatedConsultation);
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+      pendingChangesRef.current = {};
     } catch (err) {
       console.error('Error saving consultation:', err);
     } finally {
       setSaving(false);
     }
-  };
+  }, [consultation, consultationId]);
 
-  // Handle content change with debounced auto-save
+  // Auto-save a cada 1 minuto
+  useEffect(() => {
+    if (!consultation || consultation.status === 'FINALIZED') return;
+
+    const autoSaveInterval = setInterval(() => {
+      if (hasUnsavedChanges && Object.keys(pendingChangesRef.current).length > 0) {
+        saveConsultation(pendingChangesRef.current);
+      }
+    }, 60000); // 1 minuto
+
+    return () => clearInterval(autoSaveInterval);
+  }, [consultation, saveConsultation, hasUnsavedChanges]);
+
+  // Salvar ao sair da página (beforeunload)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Handle content change - apenas atualiza estado local
   const handleContentChange = (field: 'content' | 'notes', value: string) => {
     if (!consultation) return;
 
     setConsultation(prev => prev ? { ...prev, [field]: value } : null);
-    
-    // Debounced save
-    const timeoutId = setTimeout(() => {
-      saveConsultation({ [field]: value });
-    }, 1000);
-
-    return () => clearTimeout(timeoutId);
+    pendingChangesRef.current = { ...pendingChangesRef.current, [field]: value };
+    setHasUnsavedChanges(true);
   };
 
   // Finalize consultation
@@ -183,17 +212,37 @@ export default function ConsultationPage() {
 
     try {
       setSaving(true);
+
+      // Salvar alterações pendentes antes de finalizar
+      if (hasUnsavedChanges && Object.keys(pendingChangesRef.current).length > 0) {
+        const saveResponse = await fetch(`/api/consultations/${consultationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingChangesRef.current),
+        });
+        
+        if (!saveResponse.ok) {
+          throw new Error('Erro ao salvar alterações antes de finalizar');
+        }
+        
+        setHasUnsavedChanges(false);
+        pendingChangesRef.current = {};
+      }
+
       const response = await fetch(`/api/consultations/${consultationId}/finalize`, {
         method: 'POST',
       });
 
       if (!response.ok) {
-        throw new Error('Erro ao finalizar consulta');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro ao finalizar consulta');
       }
 
       const updatedConsultation = await response.json();
       setConsultation(updatedConsultation);
+      setLastSaved(new Date());
     } catch (err) {
+      console.error('Erro ao finalizar consulta:', err);
       setError(err instanceof Error ? err.message : 'Erro ao finalizar consulta');
     } finally {
       setSaving(false);
@@ -277,10 +326,12 @@ export default function ConsultationPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            {/* Session Timer */}
-            <div className={`px-6 py-3 rounded-lg border-2 font-mono text-xl font-bold ${timerColorClasses[timerColor]}`}>
-              {formatTime(elapsedTime)}
-            </div>
+            {/* Session Timer - só mostra quando consulta está aberta */}
+            {consultation.status === 'OPEN' && (
+              <div className={`px-6 py-3 rounded-lg border-2 font-mono text-xl font-bold ${timerColorClasses[timerColor]}`}>
+                {formatTime(elapsedTime)}
+              </div>
+            )}
 
             {/* Microphone Button for Voice Transcription */}
             {consultation.status === 'OPEN' && (
@@ -342,13 +393,25 @@ export default function ConsultationPage() {
               Salvando...
             </span>
           )}
+
+          {!saving && lastSaved && consultation.status === 'OPEN' && (
+            <span className="px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800">
+              Salvo às {lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+
+          {!saving && hasUnsavedChanges && consultation.status === 'OPEN' && (
+            <span className="px-4 py-2 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+              Alterações não salvas
+            </span>
+          )}
         </div>
       </div>
 
       {/* Content and Notes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Patient Content */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col">
           <h2 className="text-lg font-semibold text-text mb-4">
             Conteúdo do Paciente
           </h2>
@@ -357,12 +420,11 @@ export default function ConsultationPage() {
             onChange={(content) => handleContentChange('content', content)}
             placeholder="Digite aqui o que o paciente fala durante a consulta..."
             disabled={consultation.status === 'FINALIZED'}
-            className="min-h-[400px]"
           />
         </div>
 
         {/* Therapist Notes */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col">
           <h2 className="text-lg font-semibold text-text mb-4">
             Anotações da Terapeuta
           </h2>
@@ -371,7 +433,6 @@ export default function ConsultationPage() {
             onChange={(content) => handleContentChange('notes', content)}
             placeholder="Digite aqui suas anotações e observações sobre a consulta..."
             disabled={consultation.status === 'FINALIZED'}
-            className="min-h-[400px]"
           />
         </div>
       </div>

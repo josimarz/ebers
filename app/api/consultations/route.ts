@@ -51,9 +51,9 @@ export async function GET(request: NextRequest) {
       paid
     })
 
-    // Add caching headers for better performance
+    // Disable caching to always show fresh data
     const response = NextResponse.json(result)
-    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=180')
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
     
     return response
   } catch (error) {
