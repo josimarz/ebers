@@ -151,7 +151,7 @@
         }
       ],
       "title": "Ebers ${version}",
-      "backgroundColor": "#197BBD"
+      "backgroundColor": "#197bbd"
     },
     "win": {
       "icon": "public/icons/icon-for-ico.png",
