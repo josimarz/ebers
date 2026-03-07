@@ -29,7 +29,7 @@ interface PatientFormData {
   profilePhoto?: string;
   birthDate: string;
   gender: string;
-  cpf: string;
+  cpf?: string;
   rg?: string;
   religion: string;
   legalGuardian?: string;
@@ -230,7 +230,7 @@ export default function PatientRegistrationForm({
 
         // Success - redirect or show success message
         if (!isIpad) {
-          router.push('/patients');
+          router.push('/patients' as never);
         } else {
           // For iPad, show success message and reset form
           showToast('Paciente cadastrado com sucesso!', 'success');
@@ -516,6 +516,20 @@ export default function PatientRegistrationForm({
           
           {/* Therapy History */}
           <div className="space-y-3">
+            <div>
+              <label htmlFor="therapyReason" className="block text-sm font-medium text-gray-700 mb-2">
+                Motivo de estar fazendo terapia
+              </label>
+              <textarea
+                id="therapyReason"
+                value={formData.therapyReason || ''}
+                onChange={(e) => handleInputChange('therapyReason', e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                placeholder="Descreva o motivo pelo qual está buscando terapia"
+              />
+            </div>
+
             <div className="flex items-center space-x-3">
               <input
                 type="checkbox"
@@ -544,20 +558,6 @@ export default function PatientRegistrationForm({
                 />
               </div>
             )}
-
-            <div>
-              <label htmlFor="therapyReason" className="block text-sm font-medium text-gray-700 mb-2">
-                Motivo de estar fazendo terapia
-              </label>
-              <textarea
-                id="therapyReason"
-                value={formData.therapyReason || ''}
-                onChange={(e) => handleInputChange('therapyReason', e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                placeholder="Descreva o motivo pelo qual está buscando terapia"
-              />
-            </div>
           </div>
 
           {/* Medication */}

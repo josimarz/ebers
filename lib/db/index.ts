@@ -6,7 +6,16 @@ import * as schema from './schema'
 
 // Database path will be set by environment variable or default
 const getDatabasePath = (): string => {
-  const dbUrl = process.env.DATABASE_URL || 'file:./dev.db'
+  const dbUrl = process.env.DATABASE_URL
+  
+  if (!dbUrl) {
+    console.warn(
+      'DATABASE_URL not set. This should be configured by the Electron main process. ' +
+      'Falling back to ./dev.db (development only).'
+    )
+    return './dev.db'
+  }
+  
   // Remove 'file:' prefix if present
   return dbUrl.replace(/^file:/, '')
 }
@@ -63,18 +72,18 @@ export async function getDbAsync() {
       mkdirSync(dir, { recursive: true })
     }
     
-    // Load existing database or create new one
+    // O banco de dados DEVE existir — ele é inicializado e migrado pelo
+    // processo principal do Electron (electron/database.js) antes do
+    // Next.js iniciar. Se o arquivo não existir, algo deu errado na
+    // inicialização.
     if (existsSync(dbPath)) {
       const buffer = readFileSync(dbPath)
       sqliteInstance = new SqlJs.Database(buffer)
-      // Run migrations for existing databases
-      runMigrations(sqliteInstance)
     } else {
-      sqliteInstance = new SqlJs.Database()
-      // Initialize schema
-      initializeSchema(sqliteInstance)
-      // Save to file
-      saveDatabase()
+      throw new Error(
+        `Database file not found at: ${dbPath}. ` +
+        'The database must be initialized by the Electron main process before Next.js starts.'
+      )
     }
     
     dbInstance = drizzle(sqliteInstance, { schema })
@@ -127,85 +136,6 @@ export function closeDb(): void {
     sqliteInstance = null
     dbInstance = null
   }
-}
-
-function runMigrations(db: SqlJsDatabase): void {
-  // Add therapyReason column if it doesn't exist (migration)
-  try {
-    const cols = db.exec("PRAGMA table_info(Patient)")
-    const colNames = cols[0]?.values.map((row) => row[1] as string) ?? []
-    if (!colNames.includes('therapyReason')) {
-      db.run('ALTER TABLE Patient ADD COLUMN therapyReason TEXT')
-    }
-  } catch {
-    // Table may not exist yet; initializeSchema will handle it
-  }
-}
-
-function initializeSchema(db: SqlJsDatabase): void {  // Create Patient table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS Patient (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      profilePhoto TEXT,
-      birthDate INTEGER NOT NULL,
-      gender TEXT NOT NULL,
-      cpf TEXT,
-      rg TEXT,
-      religion TEXT NOT NULL,
-      legalGuardian TEXT,
-      legalGuardianEmail TEXT,
-      legalGuardianCpf TEXT,
-      phone1 TEXT NOT NULL,
-      phone2 TEXT,
-      email TEXT,
-      hasTherapyHistory INTEGER NOT NULL,
-      therapyHistoryDetails TEXT,
-      therapyReason TEXT,
-      takesMedication INTEGER NOT NULL,
-      medicationSince TEXT,
-      medicationNames TEXT,
-      hasHospitalization INTEGER NOT NULL,
-      hospitalizationDate TEXT,
-      hospitalizationReason TEXT,
-      consultationPrice REAL,
-      consultationFrequency TEXT,
-      consultationDay TEXT,
-      credits INTEGER NOT NULL DEFAULT 0,
-      createdAt INTEGER NOT NULL,
-      updatedAt INTEGER NOT NULL
-    )
-  `)
-  
-  // Create Patient indexes
-  db.run('CREATE INDEX IF NOT EXISTS Patient_name_idx ON Patient(name)')
-  db.run('CREATE INDEX IF NOT EXISTS Patient_birthDate_idx ON Patient(birthDate)')
-  db.run('CREATE INDEX IF NOT EXISTS Patient_credits_idx ON Patient(credits)')
-  db.run('CREATE INDEX IF NOT EXISTS Patient_createdAt_idx ON Patient(createdAt)')
-  
-  // Create Consultation table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS Consultation (
-      id TEXT PRIMARY KEY,
-      patientId TEXT NOT NULL REFERENCES Patient(id),
-      startedAt INTEGER NOT NULL,
-      finishedAt INTEGER,
-      paidAt INTEGER,
-      status TEXT NOT NULL DEFAULT 'OPEN',
-      content TEXT NOT NULL DEFAULT '',
-      notes TEXT NOT NULL DEFAULT '',
-      price REAL NOT NULL,
-      paid INTEGER NOT NULL DEFAULT 0,
-      createdAt INTEGER NOT NULL,
-      updatedAt INTEGER NOT NULL
-    )
-  `)
-  
-  // Create Consultation indexes
-  db.run('CREATE INDEX IF NOT EXISTS Consultation_patientId_idx ON Consultation(patientId)')
-  db.run('CREATE INDEX IF NOT EXISTS Consultation_status_idx ON Consultation(status)')
-  db.run('CREATE INDEX IF NOT EXISTS Consultation_paid_idx ON Consultation(paid)')
-  db.run('CREATE INDEX IF NOT EXISTS Consultation_startedAt_idx ON Consultation(startedAt)')
 }
 
 // Initialize database on module load for server-side usage

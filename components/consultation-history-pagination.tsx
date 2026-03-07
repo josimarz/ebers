@@ -24,7 +24,7 @@ export function ConsultationHistoryPagination({
   const navigateToPage = (page: number) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set('page', page.toString())
-    router.push(`/consultations?${params.toString()}`)
+    router.push(`/consultations?${params.toString()}` as never)
     router.refresh()
   }
 

@@ -106,7 +106,7 @@ export function ConsultationHistoryFilters({
     // Reset to page 1 when filters change
     params.delete('page')
     
-    router.push(`/consultations?${params.toString()}`)
+    router.push(`/consultations?${params.toString()}` as never)
     router.refresh()
   }
 

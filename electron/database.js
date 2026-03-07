@@ -5,14 +5,50 @@ const { dirname, join } = require('path');
 let SQL = null;
 let db = null;
 
+/**
+ * Parse Drizzle migration SQL into individual statements.
+ * Drizzle uses "--> statement-breakpoint" as the separator between statements.
+ * Falls back to splitting by ";" only if no breakpoints are found.
+ */
+const parseMigrationStatements = (sql) => {
+  const DRIZZLE_BREAKPOINT = '--> statement-breakpoint';
+
+  if (sql.includes(DRIZZLE_BREAKPOINT)) {
+    return sql
+      .split(DRIZZLE_BREAKPOINT)
+      .map(s => s.trim().replace(/;$/, ''))
+      .filter(s => s.length > 0);
+  }
+
+  // Fallback for simple migrations without breakpoints (e.g. single ALTER TABLE)
+  return sql
+    .split(';')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+};
+
+/**
+ * Determines if a SQLite error is safe to ignore during migrations.
+ * This handles cases where the database state already matches the migration
+ * (e.g. column added via db:push before migrations were tracked).
+ */
+const isSafeToIgnore = (error) => {
+  if (!error || !error.message) return false;
+  const msg = error.message.toLowerCase();
+  return (
+    msg.includes('duplicate column name') ||
+    msg.includes('already exists')
+  );
+};
+
 const runMigrations = async (db, migrationsPath) => {
   console.log('Running migrations from:', migrationsPath);
-  
+
   if (!existsSync(migrationsPath)) {
     console.log('No migrations directory found, skipping migrations');
     return;
   }
-  
+
   // Criar tabela de controle de migrations se não existir
   db.run(`
     CREATE TABLE IF NOT EXISTS __drizzle_migrations (
@@ -21,7 +57,7 @@ const runMigrations = async (db, migrationsPath) => {
       created_at INTEGER NOT NULL
     )
   `);
-  
+
   // Ler migrations aplicadas
   const appliedMigrations = new Set();
   try {
@@ -32,51 +68,54 @@ const runMigrations = async (db, migrationsPath) => {
   } catch (error) {
     console.log('No migrations applied yet');
   }
-  
-  // Ler arquivos de migration
+
+  // Ler arquivos de migration em ordem
   const migrationFiles = readdirSync(migrationsPath)
     .filter(f => f.endsWith('.sql'))
     .sort();
-  
+
   console.log(`Found ${migrationFiles.length} migration files`);
-  
+
   for (const file of migrationFiles) {
     const hash = file.replace('.sql', '');
-    
+
     if (appliedMigrations.has(hash)) {
       console.log(`✓ Migration already applied: ${file}`);
       continue;
     }
-    
+
     const migrationPath = join(migrationsPath, file);
     const sql = readFileSync(migrationPath, 'utf-8');
-    
-    console.log(`Running migration: ${file}`);
-    
+    const statements = parseMigrationStatements(sql);
+
+    console.log(`Running migration: ${file} (${statements.length} statements)`);
+
     try {
-      // Dividir por statements (separados por ;)
-      const statements = sql
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
-      
       for (const statement of statements) {
-        db.run(statement);
+        try {
+          db.run(statement);
+        } catch (stmtError) {
+          if (isSafeToIgnore(stmtError)) {
+            console.log(`  ⚠ Already exists, skipping: ${statement.substring(0, 80)}`);
+            continue;
+          }
+          throw stmtError;
+        }
       }
-      
+
       // Registrar migration como aplicada
       db.run(
         'INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)',
         [hash, Date.now()]
       );
-      
+
       console.log(`✓ Migration applied: ${file}`);
     } catch (error) {
       console.error(`✗ Failed to apply migration ${file}:`, error);
       throw error;
     }
   }
-  
+
   console.log('All migrations completed successfully');
 };
 

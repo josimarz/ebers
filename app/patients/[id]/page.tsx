@@ -117,7 +117,7 @@ export default function PatientEditPage() {
     }
 
     if (!isIpad) {
-      router.push('/patients');
+      router.push('/patients' as never);
     }
   };
 
@@ -170,7 +170,7 @@ export default function PatientEditPage() {
               </button>
             )}
             <button
-              onClick={() => router.push('/patients')}
+              onClick={() => router.push('/patients' as never)}
               className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
             >
               Voltar à Lista

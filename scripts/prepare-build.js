@@ -38,25 +38,16 @@ const prepareBuild = () => {
       console.log('✓ Ícones encontrados');
     }
     
-    // Verificar se o código TypeScript do Electron foi compilado
-    const mainJsPath = join(ELECTRON_DIR, 'main.js');
-    if (!existsSync(mainJsPath)) {
-      console.log('⚠ Código Electron não compilado, compilando...');
-      const { execSync } = require('child_process');
-      execSync('npm run build:electron', { stdio: 'inherit' });
-    } else {
-      console.log('✓ Código Electron compilado');
-    }
+    // Sempre recompilar o código TypeScript do Electron para garantir que está atualizado
+    console.log('🔨 Compilando código Electron...');
+    const { execSync } = require('child_process');
+    execSync('npm run build:electron', { stdio: 'inherit' });
+    console.log('✓ Código Electron compilado');
     
-    // Verificar se o Next.js foi buildado
-    const nextDir = join(ROOT_DIR, '.next');
-    if (!existsSync(nextDir)) {
-      console.log('⚠ Build do Next.js não encontrado, buildando...');
-      const { execSync } = require('child_process');
-      execSync('npm run build', { stdio: 'inherit' });
-    } else {
-      console.log('✓ Build do Next.js encontrado');
-    }
+    // Sempre rebuildar o Next.js para garantir que está atualizado
+    console.log('🔨 Buildando Next.js...');
+    execSync('npm run build', { stdio: 'inherit' });
+    console.log('✓ Build do Next.js concluído');
     
     console.log('\n✅ Preparação concluída com sucesso!');
     console.log('\nPróximos passos:');

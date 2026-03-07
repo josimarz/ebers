@@ -340,7 +340,7 @@ export default function ConsultationPage() {
               <MicrophoneButton
                 isListening={isListening}
                 isSupported={isSupported}
-                disabled={consultation.status === 'FINALIZED'}
+                disabled={false}
                 error={speechError}
                 onToggle={toggleListening}
                 onOpenInBrowser={handleOpenInBrowser}

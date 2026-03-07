@@ -28,6 +28,7 @@ async function init() {
       email TEXT,
       hasTherapyHistory INTEGER NOT NULL,
       therapyHistoryDetails TEXT,
+      therapyReason TEXT,
       takesMedication INTEGER NOT NULL,
       medicationSince TEXT,
       medicationNames TEXT,
