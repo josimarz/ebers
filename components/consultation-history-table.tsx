@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { PatientPhoto } from '@/components/ui/PatientPhoto'
 import { ConsultationHistoryPagination } from '@/components/consultation-history-pagination'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import Link from 'next/link'
 
 type Patient = {
   id: string
@@ -103,6 +103,7 @@ export function ConsultationHistoryTable({
   sortBy,
   sortOrder
 }: ConsultationHistoryTableProps) {
+  const router = useRouter()
   const [data, setData] = useState<ConsultationListResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -203,13 +204,11 @@ export function ConsultationHistoryTable({
             {consultations.map((consultation) => (
               <tr
                 key={consultation.id}
+                onClick={() => router.push(`/consultations/${consultation.id}`)}
                 className="hover:bg-gray-50 cursor-pointer transition-colors"
               >
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Link
-                    href={`/consultations/${consultation.id}`}
-                    className="flex items-center space-x-3 hover:text-primary"
-                  >
+                  <div className="flex items-center space-x-3">
                     <PatientPhoto
                       src={consultation.patient.profilePhoto}
                       alt={consultation.patient.name}
@@ -223,41 +222,22 @@ export function ConsultationHistoryTable({
                         {consultation.patient.age} anos
                       </div>
                     </div>
-                  </Link>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatDate(consultation.startedAt)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatTime(consultation.startedAt)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatTime(consultation.finishedAt)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Link
-                    href={`/consultations/${consultation.id}`}
-                    className="text-sm text-gray-900 hover:text-primary"
-                  >
-                    {formatDate(consultation.startedAt)}
-                  </Link>
+                  {getStatusBadge(consultation.status)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Link
-                    href={`/consultations/${consultation.id}`}
-                    className="text-sm text-gray-900 hover:text-primary"
-                  >
-                    {formatTime(consultation.startedAt)}
-                  </Link>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Link
-                    href={`/consultations/${consultation.id}`}
-                    className="text-sm text-gray-900 hover:text-primary"
-                  >
-                    {formatTime(consultation.finishedAt)}
-                  </Link>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Link href={`/consultations/${consultation.id}`}>
-                    {getStatusBadge(consultation.status)}
-                  </Link>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Link href={`/consultations/${consultation.id}`}>
-                    {getPaymentBadge(consultation.paid)}
-                  </Link>
+                  {getPaymentBadge(consultation.paid)}
                 </td>
               </tr>
             ))}
