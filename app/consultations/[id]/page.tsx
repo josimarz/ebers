@@ -71,16 +71,55 @@ export default function ConsultationPage() {
     toggleListening,
   } = useSpeechRecognition(handleTranscript);
 
+  // Auto-save content and notes (moved before handleOpenInBrowser to avoid TDZ)
+  const saveConsultation = useCallback(async (updates: Partial<Consultation>) => {
+    if (!consultation) return;
+
+    try {
+      setSaving(true);
+      const response = await fetch(`/api/consultations/${consultationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao salvar consulta');
+      }
+
+      const updatedConsultation = await response.json();
+      setConsultation(updatedConsultation);
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+      pendingChangesRef.current = {};
+    } catch (err) {
+      console.error('Error saving consultation:', err);
+    } finally {
+      setSaving(false);
+    }
+  }, [consultation, consultationId]);
+
   // Abrir consulta no navegador (para Electron)
   const handleOpenInBrowser = useCallback(async () => {
     if (typeof window === 'undefined') return;
     
     const electronAPI = (window as Window & { electronAPI?: { openInBrowser: (url: string) => Promise<{ success: boolean }> } }).electronAPI;
     if (electronAPI?.openInBrowser) {
+      // Salvar alterações pendentes antes de abrir no navegador
+      if (hasUnsavedChanges && Object.keys(pendingChangesRef.current).length > 0) {
+        await saveConsultation(pendingChangesRef.current);
+      }
+
       const url = `http://localhost:3000/consultations/${consultationId}`;
-      await electronAPI.openInBrowser(url);
+      const result = await electronAPI.openInBrowser(url);
+
+      if (result.success) {
+        router.push(`/consultations/${consultationId}/browser-active`);
+      }
     }
-  }, [consultationId]);
+  }, [consultationId, hasUnsavedChanges, saveConsultation, router]);
 
   // Load consultation data
   useEffect(() => {
@@ -142,36 +181,6 @@ export default function ConsultationPage() {
     const secs = seconds % 60;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Auto-save content and notes
-  const saveConsultation = useCallback(async (updates: Partial<Consultation>) => {
-    if (!consultation) return;
-
-    try {
-      setSaving(true);
-      const response = await fetch(`/api/consultations/${consultationId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao salvar consulta');
-      }
-
-      const updatedConsultation = await response.json();
-      setConsultation(updatedConsultation);
-      setLastSaved(new Date());
-      setHasUnsavedChanges(false);
-      pendingChangesRef.current = {};
-    } catch (err) {
-      console.error('Error saving consultation:', err);
-    } finally {
-      setSaving(false);
-    }
-  }, [consultation, consultationId]);
 
   // Auto-save a cada 1 minuto
   useEffect(() => {
