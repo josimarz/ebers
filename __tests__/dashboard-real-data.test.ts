@@ -28,6 +28,7 @@ describe('Dashboard Real Data Functions', () => {
     mockDb.set.mockReturnThis()
     mockDb.delete.mockReturnThis()
     mockDb.selectDistinct.mockReturnThis()
+    mockDb.groupBy.mockReturnThis()
   })
 
   test('getPatientStats should return real patient statistics', async () => {
@@ -106,8 +107,8 @@ describe('Dashboard Real Data Functions', () => {
 
     // Mock consultations list
     mockDb.all.mockReturnValueOnce(mockConsultations)
-    // Mock patient lookup for each consultation
-    mockDb.get.mockReturnValue(mockPatient)
+    // Mock batch patient lookup (now uses .all() with inArray instead of individual .get())
+    mockDb.all.mockReturnValueOnce([mockPatient])
 
     const consultations = await getRecentConsultations(3)
 

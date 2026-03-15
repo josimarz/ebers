@@ -50,6 +50,7 @@ const createChainableMock = () => {
     set: jest.fn().mockReturnThis(),
     delete: jest.fn().mockReturnThis(),
     selectDistinct: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
   }
   return mock
 }

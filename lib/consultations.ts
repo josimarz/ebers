@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, count, like } from 'drizzle-orm'
+import { eq, and, desc, asc, count, like, inArray } from 'drizzle-orm'
 import { getDbAsync, patients, consultations, saveDatabase, type Consultation, type Patient } from './db'
 
 // Types for consultation operations
@@ -292,8 +292,24 @@ export async function listConsultations(options: ConsultationListOptions = {}): 
       .offset(offset)
       .all()
 
+    // Batch query: fetch all patients for these consultations in one query
+    const patientIds = [...new Set(consultationList.map(c => c.patientId))]
+    const patientMap = new Map<string, Patient>()
+
+    if (patientIds.length > 0) {
+      const patientResults = db
+        .select()
+        .from(patients)
+        .where(inArray(patients.id, patientIds))
+        .all()
+
+      for (const patient of patientResults) {
+        patientMap.set(patient.id, patient)
+      }
+    }
+
     const consultationsWithPatient = consultationList.map(consultation => {
-      const patient = db.select().from(patients).where(eq(patients.id, consultation.patientId)).get()
+      const patient = patientMap.get(consultation.patientId)
       return transformConsultation(consultation, patient!)
     })
 
@@ -433,8 +449,24 @@ export async function getRecentConsultations(limit: number = 3): Promise<Consult
       .limit(limit)
       .all()
 
+    // Batch query: fetch all patients in one query
+    const patientIds = [...new Set(consultationList.map(c => c.patientId))]
+    const patientMap = new Map<string, Patient>()
+
+    if (patientIds.length > 0) {
+      const patientResults = db
+        .select()
+        .from(patients)
+        .where(inArray(patients.id, patientIds))
+        .all()
+
+      for (const patient of patientResults) {
+        patientMap.set(patient.id, patient)
+      }
+    }
+
     return consultationList.map(consultation => {
-      const patient = db.select().from(patients).where(eq(patients.id, consultation.patientId)).get()
+      const patient = patientMap.get(consultation.patientId)
       return transformConsultation(consultation, patient!)
     })
   } catch (error) {

@@ -1,4 +1,4 @@
-import { eq, like, asc, count, sum, and } from 'drizzle-orm'
+import { eq, like, asc, count, sum, and, sql } from 'drizzle-orm'
 import { getDbAsync, patients, consultations } from './db'
 
 // Types for financial operations
@@ -69,65 +69,77 @@ export async function getFinancialOverview(options: FinancialListOptions = {}): 
       ? like(patients.name, `%${search}%`)
       : undefined
 
-    const patientList = db
-      .select()
+    const countResult = db
+      .select({ count: count() })
       .from(patients)
       .where(whereClause)
-      .all()
+      .get()
 
-    const patientsWithFinancialData: PatientFinancialData[] = patientList.map(patient => {
-      const totalResult = db
-        .select({ count: count() })
-        .from(consultations)
-        .where(eq(consultations.patientId, patient.id))
-        .get()
-      
-      const paidResult = db
-        .select({ count: count() })
-        .from(consultations)
-        .where(and(eq(consultations.patientId, patient.id), eq(consultations.paid, true)))
-        .get()
+    const totalCount = countResult?.count ?? 0
+    const totalPages = Math.ceil(totalCount / limit)
 
-      const totalConsultations = totalResult?.count ?? 0
-      const paidConsultations = paidResult?.count ?? 0
-      const paymentDeficit = totalConsultations - paidConsultations
-      const hasPaymentIssues = paymentDeficit > 0
+    // Single query with subquery instead of N+1
+    const searchCondition = search ? `AND "Patient"."name" LIKE '%${search.replace(/'/g, "''")}%'` : ''
 
+    const rawResults = db.all(sql`
+      SELECT
+        "Patient"."id",
+        "Patient"."name",
+        "Patient"."profilePhoto",
+        "Patient"."birthDate",
+        "Patient"."credits",
+        "Patient"."consultationPrice",
+        COALESCE(c_stats.total_consultations, 0) as total_consultations,
+        COALESCE(c_stats.paid_consultations, 0) as paid_consultations,
+        COALESCE(c_stats.total_consultations, 0) - COALESCE(c_stats.paid_consultations, 0) as payment_deficit
+      FROM "Patient"
+      LEFT JOIN (
+        SELECT
+          "patientId",
+          COUNT(*) as total_consultations,
+          SUM(CASE WHEN "paid" = 1 THEN 1 ELSE 0 END) as paid_consultations
+        FROM "Consultation"
+        GROUP BY "patientId"
+      ) c_stats ON c_stats."patientId" = "Patient"."id"
+      WHERE 1=1 ${sql.raw(searchCondition)}
+      ORDER BY ${sql.raw(
+        sortBy === 'name'
+          ? `"Patient"."name" ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`
+          : `payment_deficit ${sortOrder === 'desc' ? 'DESC' : 'ASC'}`
+      )}
+      LIMIT ${limit}
+      OFFSET ${(page - 1) * limit}
+    `) as Array<{
+      id: string
+      name: string
+      profilePhoto: string | null
+      birthDate: number
+      credits: number
+      consultationPrice: number | null
+      total_consultations: number
+      paid_consultations: number
+      payment_deficit: number
+    }>
+
+    const patientsData: PatientFinancialData[] = rawResults.map(row => {
+      const birthDate = new Date(row.birthDate * 1000)
       return {
-        id: patient.id,
-        name: patient.name,
-        profilePhoto: patient.profilePhoto,
-        birthDate: patient.birthDate,
-        age: calculateAge(patient.birthDate),
-        totalConsultations,
-        paidConsultations,
-        availableCredits: patient.credits,
-        paymentDeficit,
-        hasPaymentIssues,
-        consultationPrice: patient.consultationPrice
+        id: row.id,
+        name: row.name,
+        profilePhoto: row.profilePhoto,
+        birthDate,
+        age: calculateAge(birthDate),
+        totalConsultations: row.total_consultations,
+        paidConsultations: row.paid_consultations,
+        availableCredits: row.credits,
+        paymentDeficit: row.payment_deficit,
+        hasPaymentIssues: row.payment_deficit > 0,
+        consultationPrice: row.consultationPrice
       }
     })
 
-    let sortedPatients = [...patientsWithFinancialData]
-    if (sortBy === 'paymentDeficit') {
-      sortedPatients.sort((a, b) => {
-        const comparison = b.paymentDeficit - a.paymentDeficit
-        return sortOrder === 'desc' ? comparison : -comparison
-      })
-    } else if (sortBy === 'name') {
-      sortedPatients.sort((a, b) => {
-        const comparison = a.name.localeCompare(b.name)
-        return sortOrder === 'desc' ? -comparison : comparison
-      })
-    }
-
-    const totalCount = sortedPatients.length
-    const totalPages = Math.ceil(totalCount / limit)
-    const skip = (page - 1) * limit
-    const paginatedPatients = sortedPatients.slice(skip, skip + limit)
-
     return {
-      patients: paginatedPatients,
+      patients: patientsData,
       totalCount,
       totalPages,
       currentPage: page,
@@ -236,29 +248,18 @@ export async function getFinancialStats(): Promise<{
       .get()
     const totalCreditsInSystem = Number(totalCreditsResult?.total ?? 0)
 
-    const patientList = db.select().from(patients).all()
-    let patientsWithPaymentIssues = 0
+    // Single query to count patients with payment issues instead of N+1
+    const paymentIssuesResult = db.all(sql`
+      SELECT COUNT(*) as count FROM (
+        SELECT p."id"
+        FROM "Patient" p
+        INNER JOIN "Consultation" c ON c."patientId" = p."id"
+        GROUP BY p."id"
+        HAVING COUNT(*) > SUM(CASE WHEN c."paid" = 1 THEN 1 ELSE 0 END)
+      )
+    `) as Array<{ count: number }>
 
-    for (const patient of patientList) {
-      const totalResult = db
-        .select({ count: count() })
-        .from(consultations)
-        .where(eq(consultations.patientId, patient.id))
-        .get()
-      
-      const paidResult = db
-        .select({ count: count() })
-        .from(consultations)
-        .where(and(eq(consultations.patientId, patient.id), eq(consultations.paid, true)))
-        .get()
-
-      const totalConsultations = totalResult?.count ?? 0
-      const paidConsultations = paidResult?.count ?? 0
-
-      if (totalConsultations > paidConsultations) {
-        patientsWithPaymentIssues++
-      }
-    }
+    const patientsWithPaymentIssues = paymentIssuesResult[0]?.count ?? 0
 
     return {
       totalPatients,

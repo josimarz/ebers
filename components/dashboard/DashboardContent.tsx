@@ -222,7 +222,7 @@ export default function DashboardContent() {
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
-      <Card variant="glass" className="overflow-hidden relative transform hover:scale-[1.02] transition-all duration-300">
+      <Card variant="glass" className="overflow-hidden relative">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-blue-400/5 to-blue-600/10 rounded-2xl" />
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-r from-[#197BBD] to-[#125E8A] opacity-10 rounded-full -translate-y-16 translate-x-16"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-r from-[#16a085] to-[#0d9488] opacity-10 rounded-full translate-y-12 -translate-x-12"></div>
@@ -252,10 +252,10 @@ export default function DashboardContent() {
                     href={action.href as any}
                     className={`
                       group inline-flex items-center px-6 py-4 rounded-xl font-medium text-white
-                      transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl
+                      transition-colors duration-150 shadow-lg
                       ${action.color === 'primary' 
-                        ? 'bg-gradient-to-r from-[#197BBD] to-[#125E8A] hover:from-[#125E8A] hover:to-[#0c4a6e] hover:shadow-blue-500/25' 
-                        : 'bg-gradient-to-r from-[#16a085] to-[#0d9488] hover:from-[#0d9488] hover:to-[#0f766e] hover:shadow-green-500/25'
+                        ? 'bg-gradient-to-r from-[#197BBD] to-[#125E8A] hover:from-[#125E8A] hover:to-[#0c4a6e]' 
+                        : 'bg-gradient-to-r from-[#16a085] to-[#0d9488] hover:from-[#0d9488] hover:to-[#0f766e]'
                       }
                     `}
                   >
@@ -295,7 +295,7 @@ export default function DashboardContent() {
             <Card 
               key={stat.title} 
               variant="elevated" 
-              className="group hover:scale-105 transition-all duration-300 hover:shadow-2xl relative overflow-hidden"
+              className="group relative overflow-hidden"
             >
               <div className={`absolute inset-0 bg-gradient-to-br opacity-5 ${bgColorClasses[stat.color as keyof typeof bgColorClasses]}`} />
               <CardBody className="relative z-10">
@@ -320,7 +320,6 @@ export default function DashboardContent() {
                   <div className={`
                     p-4 rounded-2xl bg-gradient-to-br shadow-lg
                     ${colorClasses[stat.color as keyof typeof colorClasses]}
-                    group-hover:shadow-xl group-hover:scale-110 transition-all duration-300
                   `}>
                     <Icon className="w-7 h-7 text-white drop-shadow-sm" />
                   </div>
@@ -338,7 +337,7 @@ export default function DashboardContent() {
 
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card variant="elevated" className="hover:shadow-2xl transition-all duration-300">
+        <Card variant="elevated" className="">
           <CardBody>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -395,7 +394,7 @@ export default function DashboardContent() {
           </CardBody>
         </Card>
 
-        <Card variant="elevated" className="hover:shadow-2xl transition-all duration-300">
+        <Card variant="elevated" className="">
           <CardBody>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">

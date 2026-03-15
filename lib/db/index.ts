@@ -1,6 +1,7 @@
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic, type SqlJsConfig } from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import * as schema from './schema'
 
@@ -125,13 +126,24 @@ export function saveDatabase(): void {
       mkdirSync(dir, { recursive: true })
     }
     
-    writeFileSync(dbPath, buffer)
+    // Use async write to avoid blocking the event loop
+    writeFile(dbPath, buffer).catch(err => {
+      console.error('Error saving database:', err)
+    })
   }
 }
 
 export function closeDb(): void {
   if (sqliteInstance) {
-    saveDatabase()
+    // Use sync write on close to ensure data is persisted before shutdown
+    const data = sqliteInstance.export()
+    const buffer = Buffer.from(data)
+    const dbPath = getDatabasePath()
+    const dir = dirname(dbPath)
+    if (dir && dir !== '.' && !existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    writeFileSync(dbPath, buffer)
     sqliteInstance.close()
     sqliteInstance = null
     dbInstance = null

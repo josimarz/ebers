@@ -25,6 +25,7 @@ describe('Patient CRUD Operations', () => {
     mockDb.set.mockReturnThis()
     mockDb.delete.mockReturnThis()
     mockDb.selectDistinct.mockReturnThis()
+    mockDb.groupBy.mockReturnThis()
   })
 
   describe('createPatient', () => {
@@ -173,9 +174,9 @@ describe('Patient CRUD Operations', () => {
       // Mock count query
       mockDb.get.mockReturnValueOnce({ count: 1 })
       // Mock patient list query
-      mockDb.all.mockReturnValue(mockPatients)
-      // Mock active consultation count for each patient
-      mockDb.get.mockReturnValue({ count: 0 })
+      mockDb.all.mockReturnValueOnce(mockPatients)
+      // Mock batch active consultation count (now uses .all() with groupBy)
+      mockDb.all.mockReturnValueOnce([])
 
       const result = await listPatients({ page: 1, limit: 10 })
 

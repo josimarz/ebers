@@ -1,4 +1,4 @@
-import { eq, like, desc, asc, and, gt, count } from 'drizzle-orm'
+import { eq, like, desc, asc, and, gt, count, inArray } from 'drizzle-orm'
 import { getDbAsync, patients, consultations, saveDatabase, type Patient } from './db'
 import { PatientInput, PatientUpdateInput, validatePatient } from './validations'
 
@@ -265,21 +265,33 @@ export async function listPatients(options: PatientListOptions = {}): Promise<Pa
       .offset(offset)
       .all()
 
-    const patientsWithAge = patientList.map(patient => {
-      const activeConsultationCount = db
-        .select({ count: count() })
+    // Batch query: get all active consultation counts in one query
+    const patientIds = patientList.map(p => p.id)
+    const activeConsultationMap = new Map<string, boolean>()
+
+    if (patientIds.length > 0) {
+      const activeResults = db
+        .select({
+          patientId: consultations.patientId,
+          count: count()
+        })
         .from(consultations)
         .where(and(
-          eq(consultations.patientId, patient.id),
+          inArray(consultations.patientId, patientIds),
           eq(consultations.status, 'OPEN')
         ))
-        .get()
+        .groupBy(consultations.patientId)
+        .all()
 
-      return {
-        ...addAgeToPatient(patient),
-        hasActiveConsultation: (activeConsultationCount?.count ?? 0) > 0
+      for (const row of activeResults) {
+        activeConsultationMap.set(row.patientId, row.count > 0)
       }
-    })
+    }
+
+    const patientsWithAge = patientList.map(patient => ({
+      ...addAgeToPatient(patient),
+      hasActiveConsultation: activeConsultationMap.get(patient.id) ?? false
+    }))
 
     return {
       patients: patientsWithAge,
