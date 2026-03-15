@@ -3,9 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import PatientRegistrationForm from '@/components/forms/PatientRegistrationForm';
-import { isIpadDevice } from '@/lib/device-detection';
 import { QRCodeModal } from '@/components/QRCodeModal';
 import { QrCode } from 'lucide-react';
+
+/**
+ * Reads the x-device-mobile cookie set by proxy.ts.
+ * This is synchronous and available on first render, avoiding hydration issues.
+ */
+function readMobileCookie(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.split(';').some(c => c.trim().startsWith('x-device-mobile=1'));
+}
 
 interface PatientData {
   id: string;
@@ -50,12 +58,12 @@ export default function PatientEditPage() {
   const [patient, setPatient] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isIpad, setIsIpad] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
   useEffect(() => {
-    setIsIpad(isIpadDevice(navigator.userAgent));
+    setIsMobile(readMobileCookie());
 
     if (window.electronAPI) {
       window.electronAPI.getNetworkInfo().then(setNetworkInfo);
@@ -116,7 +124,7 @@ export default function PatientEditPage() {
       );
     }
 
-    if (!isIpad) {
+    if (!isMobile) {
       router.push('/patients' as never);
     }
   };
@@ -153,8 +161,8 @@ export default function PatientEditPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header — oculto no iPad */}
-      {!isIpad && (
+      {/* Header — oculto em dispositivos móveis */}
+      {!isMobile && (
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-text">Editar Paciente</h1>
           <div className="flex gap-3">
@@ -163,10 +171,10 @@ export default function PatientEditPage() {
               <button
                 onClick={() => setIsQrModalOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
-                title="Gerar QR Code para edição via iPad"
+                title="Gerar QR Code para edição via dispositivo móvel"
               >
                 <QrCode size={16} />
-                QR Code iPad
+                QR Code
               </button>
             )}
             <button
@@ -182,11 +190,11 @@ export default function PatientEditPage() {
       <PatientRegistrationForm
         initialData={patient}
         onSubmit={handleSubmit}
-        isIpad={isIpad}
-        submitButtonText={isIpad ? 'Salvar' : 'Atualizar Paciente'}
+        isIpad={isMobile}
+        submitButtonText={isMobile ? 'Salvar' : 'Atualizar Paciente'}
       />
 
-      {/* Modal QR Code para edição via iPad */}
+      {/* Modal QR Code para edição via dispositivo móvel */}
       {networkInfo && (
         <QRCodeModal
           isOpen={isQrModalOpen}

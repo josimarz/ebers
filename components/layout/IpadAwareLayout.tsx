@@ -1,32 +1,23 @@
-"use client";
-
-import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import Breadcrumb from './Breadcrumb';
 import Footer from './Footer';
-import { isIpadDevice } from '@/lib/device-detection';
 
 interface IpadAwareLayoutProps {
   children: React.ReactNode;
   title?: string;
+  isMobile?: boolean;
 }
 
-export default function IpadAwareLayout({ children, title }: IpadAwareLayoutProps) {
-  const [isIpad, setIsIpad] = useState(false);
-
-  useEffect(() => {
-    setIsIpad(isIpadDevice(navigator.userAgent));
-  }, []);
-
+export default function IpadAwareLayout({ children, title, isMobile = false }: IpadAwareLayoutProps) {
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen">
-      {/* Sidebar — oculta no iPad */}
-      {!isIpad && <Sidebar />}
+      {/* Sidebar — oculta em dispositivos móveis */}
+      {!isMobile && <Sidebar />}
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Header with breadcrumb — oculto no iPad */}
-        {!isIpad && (
+        {/* Header with breadcrumb — oculto em dispositivos móveis */}
+        {!isMobile && (
           <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/50 px-6 py-4 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex flex-col space-y-2">
@@ -52,8 +43,8 @@ export default function IpadAwareLayout({ children, title }: IpadAwareLayoutProp
           </div>
         </main>
 
-        {/* Footer — oculto no iPad */}
-        {!isIpad && <Footer />}
+        {/* Footer — oculto em dispositivos móveis */}
+        {!isMobile && <Footer />}
       </div>
     </div>
   );

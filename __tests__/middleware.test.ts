@@ -2,166 +2,131 @@
  * Middleware tests for device detection and redirection logic
  */
 
-// Mock the device detection module
-jest.mock('../lib/device-detection', () => ({
-  isIpadDevice: jest.fn()
-}))
-
 // Mock Next.js server components
 jest.mock('next/server', () => ({
   NextResponse: {
-    next: jest.fn(() => ({ status: 200 })),
-    redirect: jest.fn((url: URL) => ({ 
-      status: 307, 
-      headers: new Map([['location', url.toString()]]) 
+    next: jest.fn(() => ({ status: 200, type: 'next', cookies: { set: jest.fn() } })),
+    rewrite: jest.fn((url: URL) => ({ 
+      status: 200, 
+      type: 'rewrite',
+      url: url.toString(),
+      cookies: { set: jest.fn() }
     }))
   }
 }))
 
-import { isIpadDevice } from '../lib/device-detection'
 import { NextResponse } from 'next/server'
 import { proxy } from '../proxy'
 
-const mockIsIpadDevice = isIpadDevice as jest.MockedFunction<typeof isIpadDevice>
 const mockNextResponse = NextResponse as jest.Mocked<typeof NextResponse>
+
+function createMockRequest(pathname: string, userAgent: string) {
+  const url = `http://localhost:3000${pathname}`
+  const mockRequest = {
+    nextUrl: { 
+      pathname,
+      clone: jest.fn(() => ({
+        pathname,
+        searchParams: new URLSearchParams(),
+        toString: () => url
+      }))
+    },
+    url,
+    headers: {
+      get: jest.fn((key: string) =>
+        key === 'user-agent' ? userAgent : null
+      )
+    }
+  } as any
+  return mockRequest
+}
 
 describe('Middleware', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
-  describe('iPad Device Detection and Redirection', () => {
-    it('should redirect iPad users to patient registration form', () => {
-      mockIsIpadDevice.mockReturnValue(true)
+  describe('Mobile Device Detection and Redirection', () => {
+    it('should rewrite mobile users to patient registration form', () => {
+      const mockRequest = createMockRequest('/dashboard', 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)')
+      proxy(mockRequest)
       
-      const mockRequest = {
-        headers: new Map([['user-agent', 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)']]),
-        nextUrl: { pathname: '/dashboard' },
-        url: 'http://localhost:3000/dashboard'
-      } as any
-
-      mockRequest.headers.get = jest.fn((key: string) => 
-        key === 'user-agent' ? 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)' : null
-      )
-
-      const response = proxy(mockRequest)
-      
-      expect(mockNextResponse.redirect).toHaveBeenCalledWith(expect.any(URL))
-      expect(mockIsIpadDevice).toHaveBeenCalledWith('Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)')
+      expect(mockNextResponse.rewrite).toHaveBeenCalled()
+      expect(mockNextResponse.next).not.toHaveBeenCalled()
     })
 
-    it('should allow iPad users to access patient registration form', () => {
-      mockIsIpadDevice.mockReturnValue(true)
-      
-      const mockRequest = {
-        headers: new Map([['user-agent', 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)']]),
-        nextUrl: { pathname: '/patients/new' },
-        url: 'http://localhost:3000/patients/new'
-      } as any
-
-      mockRequest.headers.get = jest.fn((key: string) => 
-        key === 'user-agent' ? 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)' : null
-      )
-
-      const response = proxy(mockRequest)
+    it('should allow mobile users to access patient registration form', () => {
+      const mockRequest = createMockRequest('/patients/new', 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)')
+      proxy(mockRequest)
       
       expect(mockNextResponse.next).toHaveBeenCalled()
-      expect(mockNextResponse.redirect).not.toHaveBeenCalled()
+      expect(mockNextResponse.rewrite).not.toHaveBeenCalled()
     })
 
-    it('should allow iPad users to access patient API routes', () => {
-      mockIsIpadDevice.mockReturnValue(true)
-      
-      const mockRequest = {
-        headers: new Map([['user-agent', 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)']]),
-        nextUrl: { pathname: '/api/patients' },
-        url: 'http://localhost:3000/api/patients'
-      } as any
-
-      mockRequest.headers.get = jest.fn((key: string) => 
-        key === 'user-agent' ? 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)' : null
-      )
-
-      const response = proxy(mockRequest)
+    it('should allow mobile users to access patient API routes', () => {
+      const mockRequest = createMockRequest('/api/patients', 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)')
+      proxy(mockRequest)
       
       expect(mockNextResponse.next).toHaveBeenCalled()
-      expect(mockNextResponse.redirect).not.toHaveBeenCalled()
+      expect(mockNextResponse.rewrite).not.toHaveBeenCalled()
+    })
+
+    it('should allow mobile users to access patient edit page', () => {
+      const mockRequest = createMockRequest('/patients/abc123', 'Mozilla/5.0 (Linux; Android 13; SM-T870)')
+      proxy(mockRequest)
+      
+      expect(mockNextResponse.next).toHaveBeenCalled()
+      expect(mockNextResponse.rewrite).not.toHaveBeenCalled()
+    })
+
+    it('should rewrite mobile users from consultations page', () => {
+      const mockRequest = createMockRequest('/consultations', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')
+      proxy(mockRequest)
+      
+      expect(mockNextResponse.rewrite).toHaveBeenCalled()
+    })
+
+    it('should rewrite mobile users from financial page', () => {
+      const mockRequest = createMockRequest('/financial', 'Mozilla/5.0 (Linux; Android 14; Pixel 8)')
+      proxy(mockRequest)
+      
+      expect(mockNextResponse.rewrite).toHaveBeenCalled()
     })
 
     it('should allow normal navigation for desktop users', () => {
-      mockIsIpadDevice.mockReturnValue(false)
-      
-      const mockRequest = {
-        headers: new Map([['user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)']]),
-        nextUrl: { pathname: '/dashboard' },
-        url: 'http://localhost:3000/dashboard'
-      } as any
-
-      mockRequest.headers.get = jest.fn((key: string) => 
-        key === 'user-agent' ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' : null
-      )
-
-      const response = proxy(mockRequest)
+      const mockRequest = createMockRequest('/dashboard', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+      proxy(mockRequest)
       
       expect(mockNextResponse.next).toHaveBeenCalled()
-      expect(mockNextResponse.redirect).not.toHaveBeenCalled()
+      expect(mockNextResponse.rewrite).not.toHaveBeenCalled()
     })
 
-    it('should allow access to static files for iPad users', () => {
-      mockIsIpadDevice.mockReturnValue(true)
-      
-      const mockRequest = {
-        headers: new Map([['user-agent', 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)']]),
-        nextUrl: { pathname: '/_next/static/css/app.css' },
-        url: 'http://localhost:3000/_next/static/css/app.css'
-      } as any
-
-      mockRequest.headers.get = jest.fn((key: string) => 
-        key === 'user-agent' ? 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)' : null
-      )
-
-      const response = proxy(mockRequest)
-      
-      expect(mockNextResponse.next).toHaveBeenCalled()
-      expect(mockNextResponse.redirect).not.toHaveBeenCalled()
+    it('should allow desktop users to access any page', () => {
+      const paths = ['/consultations', '/financial', '/patients', '/backup']
+      paths.forEach(pathname => {
+        jest.clearAllMocks()
+        const mockRequest = createMockRequest(pathname, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
+        proxy(mockRequest)
+        expect(mockNextResponse.next).toHaveBeenCalled()
+        expect(mockNextResponse.rewrite).not.toHaveBeenCalled()
+      })
     })
   })
 
   describe('Edge Cases', () => {
     it('should handle missing user-agent header', () => {
-      mockIsIpadDevice.mockReturnValue(false)
-      
-      const mockRequest = {
-        headers: new Map(),
-        nextUrl: { pathname: '/dashboard' },
-        url: 'http://localhost:3000/dashboard'
-      } as any
-
-      mockRequest.headers.get = jest.fn(() => null)
-
-      const response = proxy(mockRequest)
+      const mockRequest = createMockRequest('/dashboard', '')
+      ;(mockRequest.headers.get as jest.Mock).mockReturnValue(null)
+      proxy(mockRequest)
       
       expect(mockNextResponse.next).toHaveBeenCalled()
-      expect(mockIsIpadDevice).toHaveBeenCalledWith('')
     })
 
     it('should handle empty user-agent header', () => {
-      mockIsIpadDevice.mockReturnValue(false)
-      
-      const mockRequest = {
-        headers: new Map([['user-agent', '']]),
-        nextUrl: { pathname: '/dashboard' },
-        url: 'http://localhost:3000/dashboard'
-      } as any
-
-      mockRequest.headers.get = jest.fn((key: string) => 
-        key === 'user-agent' ? '' : null
-      )
-
-      const response = proxy(mockRequest)
+      const mockRequest = createMockRequest('/dashboard', '')
+      proxy(mockRequest)
       
       expect(mockNextResponse.next).toHaveBeenCalled()
-      expect(mockIsIpadDevice).toHaveBeenCalledWith('')
     })
   })
 })

@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect, useId } from 'react';
 import { cn } from '@/lib/utils';
 import { applyCpfMask, applyPhoneMask, applyCurrencyMask } from '@/lib/masks';
 
@@ -16,7 +16,8 @@ interface MaskedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEleme
 const MaskedInput = forwardRef<HTMLInputElement, MaskedInputProps>(
   ({ className, label, error, helperText, icon, id, mask, onChange, value, ...props }, ref) => {
     const [displayValue, setDisplayValue] = useState('');
-    const inputId = id || `masked-input-${Math.random().toString(36).substr(2, 9)}`;
+    const reactId = useId();
+    const inputId = id || `masked-input-${reactId}`;
 
     // Apply mask based on type
     const applyMask = (inputValue: string): string => {

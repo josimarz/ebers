@@ -38,15 +38,15 @@ export function QRCodeModal({ isOpen, onClose, addresses, port, path = '' }: QRC
         .then(setQrCodeDataUrl)
         .catch(console.error);
     }
-  }, [selectedAddress, port, isOpen]);
+  }, [selectedAddress, port, path, isOpen]);
 
   const copyToClipboard = async (address: string, index: number) => {
-    const url = `http://${address}:${port}`;
+    const url = `http://${address}:${port}${path}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedIndex(index);
       setTimeout(() => setCopiedIndex(null), 2000);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao copiar:', error);
     }
   };
@@ -88,10 +88,10 @@ export function QRCodeModal({ isOpen, onClose, addresses, port, path = '' }: QRC
           
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-2">
-              Escaneie o QR Code com o iPad para acessar o sistema
+              Escaneie o QR Code com o dispositivo móvel para acessar o sistema
             </p>
-            <p className="text-xs text-gray-500">
-              URL: http://{selectedAddress}:{port}
+            <p className="text-xs text-gray-500 font-mono break-all">
+              URL: http://{selectedAddress}:{port}{path}
             </p>
           </div>
         </div>
@@ -103,7 +103,7 @@ export function QRCodeModal({ isOpen, onClose, addresses, port, path = '' }: QRC
           </h3>
           <div className="space-y-2">
             {addresses.map((address, index) => {
-              const url = `http://${address}:${port}`;
+              const url = `http://${address}:${port}${path}`;
               return (
                 <div
                   key={address}

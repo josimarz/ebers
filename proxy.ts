@@ -1,48 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isIpadDevice } from '@/lib/device-detection'
 
-export function proxy(request: NextRequest) {
+/**
+ * Inline mobile detection to avoid import issues in Edge Runtime.
+ */
+function isMobile(userAgent: string): boolean {
+  return /iPad|iPhone|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Samsung|SM-T|SM-P|Kindle|Silk/i.test(userAgent)
+}
+
+/**
+ * Middleware proxy that enforces mobile device access restrictions.
+ *
+ * Mobile devices (phones, iPads, tablets) can ONLY access:
+ * - /patients/new (new patient registration)
+ * - /patients/[id] (edit existing patient — via QR code)
+ * - /api/patients/* (patient API routes needed by the forms)
+ * - Static assets (_next/*, favicon)
+ *
+ * All other routes rewrite to /patients/new?device=mobile
+ */
+export function proxy(request: NextRequest): NextResponse {
   const userAgent = request.headers.get('user-agent') || ''
-  const isIpad = isIpadDevice(userAgent)
   const pathname = request.nextUrl.pathname
-  
-  // If accessing from iPad
-  if (isIpad) {
-    // Allow access to patient registration form and its API routes
-    if (
-      pathname === '/patients/new' ||
-      pathname.startsWith('/api/patients') ||
-      pathname.startsWith('/_next/') ||
-      pathname.startsWith('/favicon.ico') ||
-      pathname === '/favicon.ico'
-    ) {
-      return NextResponse.next()
-    }
+  const mobile = isMobile(userAgent)
 
-    // Allow access to patient edit page (e.g. scanned from QR code on edit page)
-    const patientEditMatch = /^\/patients\/[^/]+$/.test(pathname)
-    if (patientEditMatch) {
-      return NextResponse.next()
-    }
-    
-    // Redirect all other paths to patient registration form
-    const url = new URL('/patients/new', request.url)
-    url.searchParams.set('device', 'ipad')
-    return NextResponse.redirect(url)
+  // Desktop users have unrestricted access
+  if (!mobile) {
+    const response = NextResponse.next()
+    response.cookies.set('x-device-mobile', '0', { path: '/' })
+    return response
   }
-  
-  // For non-iPad devices, allow normal navigation
-  return NextResponse.next()
+
+  // Normalize: remove trailing slash for consistent matching
+  const normalizedPath = pathname.endsWith('/') && pathname !== '/'
+    ? pathname.slice(0, -1)
+    : pathname
+
+  // Mobile: set cookie so client components can detect mobile synchronously
+  // Mobile: allow patient-related pages and API routes
+  if (
+    normalizedPath === '/patients/new' ||
+    normalizedPath.startsWith('/api/patients') ||
+    /^\/patients\/[^/]+$/.test(normalizedPath)
+  ) {
+    const response = NextResponse.next()
+    response.cookies.set('x-device-mobile', '1', { path: '/' })
+    return response
+  }
+
+  // Mobile: rewrite (not redirect) everything else to new patient form
+  // Using rewrite avoids redirect loops in Safari
+  const url = request.nextUrl.clone()
+  url.pathname = '/patients/new'
+  url.searchParams.set('device', 'mobile')
+  const response = NextResponse.rewrite(url)
+  response.cookies.set('x-device-mobile', '1', { path: '/' })
+  return response
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next|favicon.ico).*)',
   ],
 }

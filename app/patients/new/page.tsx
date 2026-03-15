@@ -4,16 +4,21 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import PatientRegistrationForm from '@/components/forms/PatientRegistrationForm';
 
+/**
+ * Reads the x-device-mobile cookie set by proxy.ts.
+ */
+function readMobileCookie(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.split(';').some(c => c.trim().startsWith('x-device-mobile=1'));
+}
+
 function PatientRegistrationContent() {
   const searchParams = useSearchParams();
   const [isIpad, setIsIpad] = useState(false);
 
   useEffect(() => {
-    // Check if device parameter indicates iPad
     const deviceParam = searchParams.get('device');
-    const userAgent = navigator.userAgent;
-    
-    setIsIpad(deviceParam === 'ipad' || /iPad/.test(userAgent));
+    setIsIpad(deviceParam === 'mobile' || deviceParam === 'ipad' || readMobileCookie());
   }, [searchParams]);
 
   return (

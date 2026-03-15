@@ -2,28 +2,35 @@
 
 ## Overview
 
-The middleware implements device detection and redirection logic for iPad users as specified in requirements 2.1 and 2.3.
+The middleware implements device detection and redirection logic for mobile devices (phones, iPads, tablets) as a security measure to restrict navigation.
 
 ## Functionality
 
-### iPad Detection
-- Uses the `isIpadDevice` utility function to detect iPad devices via User-Agent header
+### Mobile Device Detection
+- Uses the `isMobileDevice` utility function to detect mobile devices via User-Agent header
+- Detects: iPad, iPhone, Android phones/tablets, Samsung tablets, Kindle, and other mobile devices
 - Handles missing or empty User-Agent headers gracefully
 
 ### Redirection Logic
-When an iPad device is detected:
+When a mobile device is detected:
 
-1. **Allowed Paths**: iPad users can access:
-   - `/patients/new` - Patient registration form
-   - `/api/patients/*` - Patient API routes
-   - `/_next/*` - Next.js static assets
-   - `/favicon.ico` - Favicon
+1. **Allowed Paths**: Mobile users can access:
+   - `/patients/new` — Patient registration form
+   - `/patients/[id]` — Patient edit page (via QR code)
+   - `/api/patients/*` — Patient API routes
+   - `/_next/*` — Next.js static assets
+   - `/favicon.ico` — Favicon
 
-2. **Restricted Paths**: All other paths redirect to `/patients/new?device=ipad`
+2. **Restricted Paths**: All other paths redirect to `/patients/new?device=mobile`
 
 ### Desktop Behavior
 - Desktop users have unrestricted access to all routes
-- No redirection occurs for non-iPad devices
+- No redirection occurs for non-mobile devices
+
+### QR Code Access Flow
+The "Rede" button generates a QR code with the appropriate path:
+- If the therapist is on a patient edit page (`/patients/[id]`), the QR code points to that page
+- If the therapist is on any other page, the QR code points to `/patients/new`
 
 ## Implementation Details
 
@@ -36,38 +43,23 @@ export const config = {
 }
 ```
 
-This matcher ensures the middleware runs on all routes except static assets.
-
 ### Device Detection
 ```typescript
 const userAgent = request.headers.get('user-agent') || ''
-const isIpad = isIpadDevice(userAgent)
+const isMobile = isMobileDevice(userAgent)
 ```
 
-Uses the existing `isIpadDevice` utility for consistent device detection.
-
-### Redirection
-```typescript
-const url = new URL('/patients/new', request.url)
-url.searchParams.set('device', 'ipad')
-return NextResponse.redirect(url)
-```
-
-Redirects to patient registration with device parameter for UI customization.
-
-## Requirements Compliance
-
-- ✅ **Requirement 2.1**: iPad users are redirected to patient registration form
-- ✅ **Requirement 2.3**: iPad users cannot navigate away from registration form
-- ✅ Maintains access to necessary API routes and static assets
-- ✅ Preserves normal navigation for desktop users
+### UI Restrictions on Mobile
+- Sidebar is hidden
+- Header/breadcrumb is hidden
+- Footer is hidden
+- Only the patient form is visible
+- Therapist-only fields (price, frequency, day) are hidden
 
 ## Testing
 
 The middleware is tested with:
-- iPad device detection and redirection
-- Allowed path access for iPad users
+- Mobile device detection and redirection
+- Allowed path access for mobile users
 - Normal navigation for desktop users
 - Edge cases (missing/empty User-Agent)
-
-All tests pass and verify the middleware behavior matches requirements.
