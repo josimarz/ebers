@@ -42,7 +42,7 @@ export function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none',
+        class: 'prose prose-sm max-w-none focus:outline-none',
         'data-placeholder': placeholder,
       },
     },
