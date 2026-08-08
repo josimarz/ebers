@@ -1,0 +1,22 @@
+[tools]
+node = "26"
+rust = "1.94"
+
+[tasks.dev]
+description = "Roda o app desktop (Tauri + Vite)"
+run = "npm run tauri dev"
+
+[tasks.test]
+description = "Testes do frontend (Vitest) e do backend (cargo test)"
+run = [
+  "npm run test:run",
+  "cargo test --manifest-path src-tauri/Cargo.toml",
+]
+
+[tasks.lint]
+description = "Biome: lint + formatação do frontend"
+run = "npm run lint"
+
+[tasks."db:generate"]
+description = "Gera migração SQL a partir do schema Drizzle (src/db/schema.ts)"
+run = "npx drizzle-kit generate"
