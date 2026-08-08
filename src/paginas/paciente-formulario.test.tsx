@@ -51,7 +51,10 @@ async function preencherCamposObrigatorios(terapeuta: UserEvent) {
     "Sem religião",
   );
   await terapeuta.type(screen.getByLabelText("Telefone 1"), "(11) 91234-5678");
-  await terapeuta.selectOptions(screen.getByLabelText("Já fez terapia?"), "Não");
+  await terapeuta.selectOptions(
+    screen.getByLabelText("Já fez terapia?"),
+    "Não",
+  );
   await terapeuta.selectOptions(
     screen.getByLabelText("Toma algum medicamento?"),
     "Não",
@@ -106,7 +109,10 @@ test("responder Sim exibe e exige os campos clínicos dependentes", async () => 
   expect(
     screen.queryByLabelText("Quando fez terapia?"),
   ).not.toBeInTheDocument();
-  await terapeuta.selectOptions(screen.getByLabelText("Já fez terapia?"), "Sim");
+  await terapeuta.selectOptions(
+    screen.getByLabelText("Já fez terapia?"),
+    "Sim",
+  );
   expect(screen.getByLabelText("Quando fez terapia?")).toBeRequired();
 
   expect(
@@ -132,7 +138,10 @@ test("responder Sim exibe e exige os campos clínicos dependentes", async () => 
   expect(screen.getByLabelText("Razão da hospitalização")).toBeRequired();
 
   // Voltar para Não esconde os dependentes de novo.
-  await terapeuta.selectOptions(screen.getByLabelText("Já fez terapia?"), "Não");
+  await terapeuta.selectOptions(
+    screen.getByLabelText("Já fez terapia?"),
+    "Não",
+  );
   expect(
     screen.queryByLabelText("Quando fez terapia?"),
   ).not.toBeInTheDocument();
@@ -260,7 +269,10 @@ test("edição carrega o paciente, mostra o CPF com máscara e salva a atualiza�
   expect(screen.getByLabelText("Valor da consulta (R$)")).toHaveValue("250,00");
 
   await terapeuta.clear(screen.getByLabelText("Nome completo"));
-  await terapeuta.type(screen.getByLabelText("Nome completo"), "Ana Lima Santos");
+  await terapeuta.type(
+    screen.getByLabelText("Nome completo"),
+    "Ana Lima Santos",
+  );
   enfileirarSelect([{ total: 0 }]);
   await terapeuta.click(salvar());
 

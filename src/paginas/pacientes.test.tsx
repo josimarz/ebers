@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import type { DadosPaciente } from "@/dominio/paciente";
 import {
   dadosPacienteValidos,
   linhaDePaciente,
@@ -15,7 +17,18 @@ import { PaginaPacientes } from "./pacientes";
 // página → listarPacientes → drizzle (sqlite-proxy) roda de verdade.
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
 
-beforeEach(reiniciarBancoFalso);
+beforeEach(() => {
+  reiniciarBancoFalso();
+  proximoId = 1;
+  // Só o relógio de parede é falso (idades estáveis); timers continuam reais
+  // para não interferir no user-event e nos findBy*.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 7, 8, 12));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function renderizarPagina() {
   return render(
@@ -23,6 +36,20 @@ function renderizarPagina() {
       <PaginaPacientes />
     </MemoryRouter>,
   );
+}
+
+let proximoId = 1;
+
+function pacienteNaListagem(ajustes: Partial<DadosPaciente> = {}) {
+  return linhaDePaciente({ id: proximoId++, ...dadosPacienteValidos(ajustes) });
+}
+
+/** Nomes das linhas do corpo da tabela, na ordem exibida. */
+function nomesExibidos(): string[] {
+  const corpo = screen.getAllByRole("rowgroup")[1];
+  return within(corpo)
+    .getAllByRole("row")
+    .map((linha) => within(linha).getAllByRole("cell")[1].textContent ?? "");
 }
 
 test("sem pacientes cadastrados, a página mostra o estado vazio", async () => {
@@ -44,25 +71,228 @@ test("a página oferece o cadastro de novo paciente", async () => {
   ).toHaveAttribute("href", "/pacientes/novo");
 });
 
-test("pacientes cadastrados aparecem com a ação Editar", async () => {
+test("a tabela tem as colunas da spec, na ordem", async () => {
+  enfileirarSelect([pacienteNaListagem()]);
+  renderizarPagina();
+
+  await screen.findByText("Ana Lima");
+  const cabecalhos = screen
+    .getAllByRole("columnheader")
+    .map((cabecalho) => cabecalho.textContent);
+  expect(cabecalhos).toEqual([
+    "Foto",
+    "Nome",
+    "Idade",
+    "Telefone",
+    "Periodicidade",
+    "Dia da semana",
+    "Créditos",
+    "Ações",
+  ]);
+});
+
+test("cada paciente vira uma linha com idade calculada, telefone, periodicidade, dia e créditos", async () => {
+  enfileirarSelect([pacienteNaListagem()]);
+  renderizarPagina();
+
+  const linha = (await screen.findByText("Ana Lima")).closest("tr");
+  expect(linha).not.toBeNull();
+  const celulas = within(linha as HTMLElement)
+    .getAllByRole("cell")
+    .map((celula) => celula.textContent);
+  // Nascida em 1990-03-10, aos 2026-08-08 tem 36 anos; sem Movimentos de
+  // crédito no sistema, o saldo é 0.
+  expect(celulas).toEqual([
+    "",
+    "Ana Lima",
+    "36",
+    "(11) 91234-5678",
+    "Semanal",
+    "Quarta",
+    "0",
+    "Editar",
+  ]);
+});
+
+test("periodicidade e dia da semana vazios aparecem como travessão", async () => {
   enfileirarSelect([
-    linhaDePaciente({ id: 1, ...dadosPacienteValidos() }),
-    linhaDePaciente({
-      id: 2,
-      ...dadosPacienteValidos({
-        nomeCompleto: "Bia Souza",
-        cpf: "12345678909",
-      }),
-    }),
+    pacienteNaListagem({ periodicidade: null, diaSemanaConsulta: null }),
   ]);
   renderizarPagina();
 
-  expect(await screen.findByText("Ana Lima")).toBeInTheDocument();
-  expect(screen.getByText("Bia Souza")).toBeInTheDocument();
+  const linha = (await screen.findByText("Ana Lima")).closest("tr");
+  const celulas = within(linha as HTMLElement)
+    .getAllByRole("cell")
+    .map((celula) => celula.textContent);
+  expect(celulas.slice(4, 6)).toEqual(["—", "—"]);
+});
 
-  const linha = screen.getByText("Ana Lima").closest("li");
-  expect(linha).not.toBeNull();
+test("o botão Editar abre o formulário de edição do paciente", async () => {
+  enfileirarSelect([
+    pacienteNaListagem(),
+    pacienteNaListagem({ nomeCompleto: "Bia Souza", cpf: "12345678909" }),
+  ]);
+  renderizarPagina();
+
+  const linha = (await screen.findByText("Ana Lima")).closest("tr");
   expect(
     within(linha as HTMLElement).getByRole("link", { name: "Editar" }),
   ).toHaveAttribute("href", "/pacientes/1/editar");
+});
+
+test("a listagem nasce ordenada por nome, ignorando acentos e caixa", async () => {
+  enfileirarSelect([
+    pacienteNaListagem({ nomeCompleto: "Édson Prado" }),
+    pacienteNaListagem({ nomeCompleto: "ana beatriz" }),
+    pacienteNaListagem({ nomeCompleto: "Bruno Castro" }),
+  ]);
+  renderizarPagina();
+
+  await screen.findByText("Bruno Castro");
+  expect(nomesExibidos()).toEqual([
+    "ana beatriz",
+    "Bruno Castro",
+    "Édson Prado",
+  ]);
+  expect(screen.getByRole("columnheader", { name: "Nome" })).toHaveAttribute(
+    "aria-sort",
+    "ascending",
+  );
+});
+
+test("clicar em Nome inverte a ordenação", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect([
+    pacienteNaListagem({ nomeCompleto: "Ana Lima" }),
+    pacienteNaListagem({ nomeCompleto: "Bia Souza", cpf: "12345678909" }),
+  ]);
+  renderizarPagina();
+  await screen.findByText("Ana Lima");
+
+  await terapeuta.click(screen.getByRole("button", { name: "Nome" }));
+
+  expect(nomesExibidos()).toEqual(["Bia Souza", "Ana Lima"]);
+  expect(screen.getByRole("columnheader", { name: "Nome" })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+});
+
+test("clicar em Idade ordena do mais novo para o mais velho, e de novo inverte", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect([
+    pacienteNaListagem({ nomeCompleto: "Ana Lima" }),
+    pacienteNaListagem({
+      nomeCompleto: "Bia Souza",
+      cpf: "12345678909",
+      dataNascimento: "2010-01-20",
+    }),
+    pacienteNaListagem({
+      nomeCompleto: "Carla Nunes",
+      cpf: "11144477735",
+      dataNascimento: "2000-09-01",
+    }),
+  ]);
+  renderizarPagina();
+  await screen.findByText("Ana Lima");
+
+  const idade = () => screen.getByRole("button", { name: "Idade" });
+
+  await terapeuta.click(idade());
+  expect(nomesExibidos()).toEqual(["Bia Souza", "Carla Nunes", "Ana Lima"]);
+  expect(screen.getByRole("columnheader", { name: "Idade" })).toHaveAttribute(
+    "aria-sort",
+    "ascending",
+  );
+  expect(
+    screen.getByRole("columnheader", { name: "Nome" }),
+  ).not.toHaveAttribute("aria-sort");
+
+  await terapeuta.click(idade());
+  expect(nomesExibidos()).toEqual(["Ana Lima", "Carla Nunes", "Bia Souza"]);
+  expect(screen.getByRole("columnheader", { name: "Idade" })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+});
+
+test("a busca filtra por nome ignorando acentos e caixa", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect([
+    pacienteNaListagem({ nomeCompleto: "José da Silva" }),
+    pacienteNaListagem({ nomeCompleto: "Joana Prado", cpf: "12345678909" }),
+  ]);
+  renderizarPagina();
+  await screen.findByText("José da Silva");
+
+  await terapeuta.type(
+    screen.getByRole("searchbox", { name: "Buscar por nome" }),
+    "JOSE",
+  );
+
+  expect(nomesExibidos()).toEqual(["José da Silva"]);
+  expect(screen.queryByText("Joana Prado")).not.toBeInTheDocument();
+});
+
+test("busca sem correspondência explica o resultado vazio", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect([pacienteNaListagem()]);
+  renderizarPagina();
+  await screen.findByText("Ana Lima");
+
+  await terapeuta.type(
+    screen.getByRole("searchbox", { name: "Buscar por nome" }),
+    "zulmira",
+  );
+
+  expect(screen.getByText("Nenhum paciente encontrado")).toBeInTheDocument();
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+});
+
+function onzePacientes() {
+  return Array.from({ length: 11 }, (_, i) =>
+    pacienteNaListagem({
+      nomeCompleto: `Paciente ${String(i + 1).padStart(2, "0")}`,
+    }),
+  );
+}
+
+test("a listagem é paginada de 10 em 10", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect(onzePacientes());
+  renderizarPagina();
+  await screen.findByText("Paciente 01");
+
+  expect(nomesExibidos()).toHaveLength(10);
+  expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled();
+
+  await terapeuta.click(screen.getByRole("button", { name: "Próxima" }));
+
+  expect(nomesExibidos()).toEqual(["Paciente 11"]);
+  expect(screen.getByText("Página 2 de 2")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Próxima" })).toBeDisabled();
+
+  await terapeuta.click(screen.getByRole("button", { name: "Anterior" }));
+
+  expect(nomesExibidos()).toHaveLength(10);
+  expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+});
+
+test("buscar volta para a primeira página", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect(onzePacientes());
+  renderizarPagina();
+  await screen.findByText("Paciente 01");
+
+  await terapeuta.click(screen.getByRole("button", { name: "Próxima" }));
+  expect(screen.getByText("Página 2 de 2")).toBeInTheDocument();
+
+  await terapeuta.type(
+    screen.getByRole("searchbox", { name: "Buscar por nome" }),
+    "paciente",
+  );
+
+  expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+  expect(nomesExibidos()).toHaveLength(10);
 });
