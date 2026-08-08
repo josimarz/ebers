@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { LayoutApp } from "@/layout/layout-app";
 import { PaginaConsultas } from "@/paginas/consultas";
 import { PaginaFinanceiro } from "@/paginas/financeiro";
+import { PaginaFormularioPaciente } from "@/paginas/paciente-formulario";
 import { PaginaPacientes } from "@/paginas/pacientes";
 
 export interface Secao {
@@ -47,6 +48,11 @@ export function Rotas() {
             element={secao.elemento}
           />
         ))}
+        <Route path="/pacientes/novo" element={<PaginaFormularioPaciente />} />
+        <Route
+          path="/pacientes/:id/editar"
+          element={<PaginaFormularioPaciente />}
+        />
       </Route>
     </Routes>
   );

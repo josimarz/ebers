@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
 import { listarPacientes, type Paciente } from "@/db/pacientes";
 
 type Carga =
@@ -25,7 +27,12 @@ export function PaginaPacientes() {
 
   return (
     <section className="flex flex-col gap-6">
-      <h1 className="font-heading text-2xl font-semibold">Pacientes</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="font-heading text-2xl font-semibold">Pacientes</h1>
+        <Button asChild>
+          <Link to="/pacientes/novo">Novo Paciente</Link>
+        </Button>
+      </div>
 
       {carga.estado === "carregando" && (
         <p className="text-muted-foreground">Carregando pacientes…</p>
@@ -48,8 +55,14 @@ export function PaginaPacientes() {
         ) : (
           <ul className="flex flex-col gap-2">
             {carga.pacientes.map((paciente) => (
-              <li key={paciente.id} className="glass-bg rounded-lg px-4 py-3">
-                {paciente.nomeCompleto}
+              <li
+                key={paciente.id}
+                className="glass-bg flex items-center justify-between gap-4 rounded-lg px-4 py-3"
+              >
+                <span>{paciente.nomeCompleto}</span>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/pacientes/${paciente.id}/editar`}>Editar</Link>
+                </Button>
               </li>
             ))}
           </ul>

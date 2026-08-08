@@ -50,6 +50,17 @@ test("o cabeçalho traz o breadcrumb da seção atual", async () => {
   expect(within(breadcrumb).getByText("Consultas")).toBeInTheDocument();
 });
 
+test("as rotas de cadastro e edição de paciente vivem dentro do layout", async () => {
+  renderizarApp("/pacientes/novo");
+
+  expect(
+    await screen.findByRole("heading", { name: "Novo Paciente" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("navigation", { name: "Menu principal" }),
+  ).toBeInTheDocument();
+});
+
 test("o rodapé está presente", async () => {
   renderizarApp();
 
