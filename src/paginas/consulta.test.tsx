@@ -391,6 +391,179 @@ test("Finalizar Consulta grava o novo status e a página passa a Finalizada", as
   );
 });
 
+test("Efetuar Pagamento grava o pagamento Direto e a ação vira Desfazer Pagamento", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta(); // Aberta não paga
+  await renderizarPagina();
+
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Efetuar Pagamento" }),
+  );
+  await passar(0); // drena a gravação e a re-renderização do cabeçalho
+
+  const atualizacoes = chamadas.filter((chamada) =>
+    /update "consultas" set/i.test(chamada.sql),
+  );
+  expect(atualizacoes).toHaveLength(1);
+  expect(atualizacoes[0].valores).toEqual([
+    AGORA_ISO,
+    1,
+    "Direto",
+    3,
+    "Cancelada",
+    0,
+  ]);
+
+  // Paga Direto: Efetuar vira Desfazer e o Cancelar some — cancelar agora
+  // exigiria desfazer o pagamento antes (spec 2.3).
+  expect(
+    screen.getByRole("button", { name: "Desfazer Pagamento" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Efetuar Pagamento" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Cancelar Consulta" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Finalizar Consulta" }),
+  ).toBeInTheDocument();
+});
+
+test("Desfazer Pagamento zera o pagamento e as ações voltam a Efetuar e Cancelar", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta({
+    pago: true,
+    pagoEm: AGORA_ISO,
+    origemPagamento: "Direto",
+  });
+  await renderizarPagina();
+
+  // Paga Direto: sem Efetuar nem Cancelar — só Desfazer (e Finalizar).
+  expect(
+    screen.queryByRole("button", { name: "Efetuar Pagamento" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Cancelar Consulta" }),
+  ).not.toBeInTheDocument();
+
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Desfazer Pagamento" }),
+  );
+  await passar(0);
+
+  const atualizacoes = chamadas.filter((chamada) =>
+    /update "consultas" set/i.test(chamada.sql),
+  );
+  expect(atualizacoes).toHaveLength(1);
+  expect(atualizacoes[0].valores).toEqual([
+    null,
+    0,
+    null,
+    3,
+    "Cancelada",
+    "Direto",
+  ]);
+
+  expect(
+    screen.getByRole("button", { name: "Efetuar Pagamento" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Cancelar Consulta" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Desfazer Pagamento" }),
+  ).not.toBeInTheDocument();
+});
+
+test("Cancelar Consulta paga por Crédito estorna o crédito e trava a página", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta({
+    pago: true,
+    pagoEm: AGORA_ISO,
+    origemPagamento: "Crédito",
+  });
+  await renderizarPagina();
+
+  // Paga por Crédito: cancelar pode; efetuar/desfazer não (spec 2.3).
+  expect(
+    screen.queryByRole("button", { name: "Efetuar Pagamento" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Desfazer Pagamento" }),
+  ).not.toBeInTheDocument();
+
+  // cancelarConsulta relê a consulta antes de gravar.
+  enfileirarSelect([
+    linhaDeConsulta(
+      consultaAberta({
+        id: 3,
+        pacienteId: 7,
+        iniciadoEm: AGORA_ISO,
+        pago: true,
+        pagoEm: AGORA_ISO,
+        origemPagamento: "Crédito",
+      }),
+    ),
+  ]);
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Cancelar Consulta" }),
+  );
+  await passar(0);
+
+  const atualizacoes = chamadas.filter((chamada) =>
+    /update "consultas" set/i.test(chamada.sql),
+  );
+  expect(atualizacoes).toHaveLength(1);
+  expect(atualizacoes[0].valores).toEqual([
+    null,
+    "Cancelada",
+    0,
+    null,
+    3,
+    "Aberta",
+  ]);
+  const estornos = chamadas.filter((chamada) =>
+    /insert into "movimentos_credito"/i.test(chamada.sql),
+  );
+  expect(estornos).toHaveLength(1);
+  expect(estornos[0].valores).toEqual([7, "Estorno", 1, AGORA_ISO, 3]);
+
+  // A página passa a Cancelada: somente leitura, sem nenhuma ação.
+  expect(screen.getByText("Cancelada")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Timer da consulta")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Conteúdo")).toBeDisabled();
+  expect(screen.getByLabelText("Notas")).toHaveAttribute(
+    "contenteditable",
+    "false",
+  );
+  expect(
+    screen.queryAllByRole("button", { name: /Consulta|Pagamento/ }),
+  ).toEqual([]);
+});
+
+test("consulta Finalizada não paga oferece só Efetuar Pagamento", async () => {
+  carregarConsulta({
+    status: "Finalizada",
+    finalizadoEm: AGORA_ISO,
+  });
+  await renderizarPagina();
+
+  expect(screen.getByText("Finalizada")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Efetuar Pagamento" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Finalizar Consulta" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Cancelar Consulta" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Desfazer Pagamento" }),
+  ).not.toBeInTheDocument();
+});
+
 test("consulta Cancelada é somente leitura, sem timer e sem ações", async () => {
   carregarConsulta({ status: "Cancelada" });
   await renderizarPagina();
@@ -405,6 +578,15 @@ test("consulta Cancelada é somente leitura, sem timer e sem ações", async () 
   expect(screen.getByLabelText("Título")).toBeDisabled();
   expect(
     screen.queryByRole("button", { name: "Finalizar Consulta" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Efetuar Pagamento" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Desfazer Pagamento" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Cancelar Consulta" }),
   ).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Timer da consulta")).not.toBeInTheDocument();
 });

@@ -1,5 +1,9 @@
 import { expect, test } from "vitest";
-import { pagamentoNaCriacao, timerDaConsulta } from "./consulta";
+import {
+  acoesDaConsulta,
+  pagamentoNaCriacao,
+  timerDaConsulta,
+} from "./consulta";
 
 const AGORA = "2026-08-08T14:30:00.000Z";
 
@@ -59,6 +63,114 @@ test("ao zerar, o timer mostra 00:00 em vermelho", () => {
   expect(timerDaConsulta(INICIO, decorrido(60))).toEqual({
     texto: "00:00",
     cor: "vermelha",
+  });
+});
+
+test("Aberta não paga: editável, com Finalizar, Efetuar Pagamento e Cancelar", () => {
+  expect(
+    acoesDaConsulta({ status: "Aberta", pago: false, origemPagamento: null }),
+  ).toEqual({
+    camposEditaveis: true,
+    finalizar: true,
+    efetuarPagamento: true,
+    desfazerPagamento: false,
+    cancelar: true,
+  });
+});
+
+test("Aberta paga por Crédito ainda pode ser cancelada, mas não desfeita", () => {
+  expect(
+    acoesDaConsulta({
+      status: "Aberta",
+      pago: true,
+      origemPagamento: "Crédito",
+    }),
+  ).toEqual({
+    camposEditaveis: true,
+    finalizar: true,
+    efetuarPagamento: false,
+    desfazerPagamento: false,
+    cancelar: true,
+  });
+});
+
+test("Aberta paga Direto exige desfazer o pagamento antes de cancelar", () => {
+  expect(
+    acoesDaConsulta({
+      status: "Aberta",
+      pago: true,
+      origemPagamento: "Direto",
+    }),
+  ).toEqual({
+    camposEditaveis: true,
+    finalizar: true,
+    efetuarPagamento: false,
+    desfazerPagamento: true,
+    cancelar: false,
+  });
+});
+
+test("Finalizada não paga: só Efetuar Pagamento, sem finalizar de novo nem cancelar", () => {
+  expect(
+    acoesDaConsulta({
+      status: "Finalizada",
+      pago: false,
+      origemPagamento: null,
+    }),
+  ).toEqual({
+    camposEditaveis: true,
+    finalizar: false,
+    efetuarPagamento: true,
+    desfazerPagamento: false,
+    cancelar: false,
+  });
+});
+
+test("Finalizada paga Direto: só Desfazer Pagamento", () => {
+  expect(
+    acoesDaConsulta({
+      status: "Finalizada",
+      pago: true,
+      origemPagamento: "Direto",
+    }),
+  ).toEqual({
+    camposEditaveis: true,
+    finalizar: false,
+    efetuarPagamento: false,
+    desfazerPagamento: true,
+    cancelar: false,
+  });
+});
+
+test("Finalizada paga por Crédito: editável, sem nenhuma ação de pagamento", () => {
+  expect(
+    acoesDaConsulta({
+      status: "Finalizada",
+      pago: true,
+      origemPagamento: "Crédito",
+    }),
+  ).toEqual({
+    camposEditaveis: true,
+    finalizar: false,
+    efetuarPagamento: false,
+    desfazerPagamento: false,
+    cancelar: false,
+  });
+});
+
+test("Cancelada é somente leitura, sem nenhuma ação", () => {
+  expect(
+    acoesDaConsulta({
+      status: "Cancelada",
+      pago: false,
+      origemPagamento: null,
+    }),
+  ).toEqual({
+    camposEditaveis: false,
+    finalizar: false,
+    efetuarPagamento: false,
+    desfazerPagamento: false,
+    cancelar: false,
   });
 });
 

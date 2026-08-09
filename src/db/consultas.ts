@@ -1,5 +1,9 @@
 import { and, eq, ne } from "drizzle-orm";
-import { pagamentoNaCriacao } from "@/dominio/consulta";
+import {
+  acoesDaConsulta,
+  pagamentoNaCriacao,
+  SEM_PAGAMENTO,
+} from "@/dominio/consulta";
 import { banco } from "./banco";
 import { saldoDeCreditos } from "./creditos";
 import { buscarPaciente } from "./pacientes";
@@ -116,6 +120,88 @@ export async function salvarConteudo(id: number, texto: string): Promise<void> {
 
 export async function salvarNotas(id: number, texto: string): Promise<void> {
   await banco.update(consultas).set({ notas: texto }).where(salvavel(id));
+}
+
+/**
+ * Efetuar Pagamento (spec 2.3): registra na Consulta o Pagamento direto,
+ * recebido fora do sistema. Disponível em Aberta/Finalizada não paga — o
+ * where respalda a matriz de ações no banco.
+ */
+export async function efetuarPagamento(id: number): Promise<void> {
+  await banco
+    .update(consultas)
+    .set({
+      pago: true,
+      pagoEm: new Date().toISOString(),
+      origemPagamento: "Direto",
+    })
+    .where(
+      and(
+        eq(consultas.id, id),
+        ne(consultas.status, "Cancelada"),
+        eq(consultas.pago, false),
+      ),
+    );
+}
+
+/**
+ * Desfazer Pagamento (spec 2.3): zera Pago, Pago em e Origem. Só para
+ * pagamento com Origem "Direto" — o pago por Crédito não é desfeito, só
+ * devolvido via cancelamento (a devolução do dinheiro acontece fora do
+ * sistema).
+ */
+export async function desfazerPagamento(id: number): Promise<void> {
+  await banco
+    .update(consultas)
+    .set(SEM_PAGAMENTO)
+    .where(
+      and(
+        eq(consultas.id, id),
+        ne(consultas.status, "Cancelada"),
+        eq(consultas.origemPagamento, "Direto"),
+      ),
+    );
+}
+
+/** Cancelamento fora da matriz de ações (spec 2.3). */
+export class CancelamentoInvalidoError extends Error {
+  constructor() {
+    super("A consulta não pode ser cancelada");
+    this.name = "CancelamentoInvalidoError";
+  }
+}
+
+/**
+ * Cancelar Consulta (spec 2.3): Status → Cancelada com o pagamento zerado —
+ * Cancelada nunca conta como paga — e o registro preservado para sempre. Se
+ * estava paga por Crédito, o extrato recebe o Estorno (+1) referenciando a
+ * consulta (spec 3.3).
+ *
+ * Como em criarConsulta, as gravações são sequenciais, sem transação: uma
+ * queda entre o update e o insert deixa a Cancelada sem o Estorno — visível
+ * no extrato e corrigível com um Ajuste.
+ */
+export async function cancelarConsulta(id: number): Promise<void> {
+  const consulta = await buscarConsulta(id);
+  if (consulta === undefined) throw new Error("Consulta não encontrada");
+  if (!acoesDaConsulta(consulta).cancelar) {
+    throw new CancelamentoInvalidoError();
+  }
+
+  await banco
+    .update(consultas)
+    .set({ status: "Cancelada", ...SEM_PAGAMENTO })
+    .where(and(eq(consultas.id, id), eq(consultas.status, "Aberta")));
+
+  if (consulta.origemPagamento === "Crédito") {
+    await banco.insert(movimentosCredito).values({
+      pacienteId: consulta.pacienteId,
+      tipo: "Estorno",
+      quantidade: 1,
+      ocorridoEm: new Date().toISOString(),
+      consultaId: consulta.id,
+    });
+  }
 }
 
 /** Finalizar Consulta (spec 2.3): Status → Finalizada, Finalizado em = agora. */

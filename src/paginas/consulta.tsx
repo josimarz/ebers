@@ -6,12 +6,19 @@ import { Button } from "@/components/ui/button";
 import {
   buscarConsulta,
   type Consulta,
+  cancelarConsulta,
+  desfazerPagamento,
+  efetuarPagamento,
   finalizarConsulta,
   salvarConteudo,
   salvarNotas,
 } from "@/db/consultas";
 import { buscarPaciente, type Paciente } from "@/db/pacientes";
-import { timerDaConsulta } from "@/dominio/consulta";
+import {
+  acoesDaConsulta,
+  SEM_PAGAMENTO,
+  timerDaConsulta,
+} from "@/dominio/consulta";
 import { calcularIdade, hojeIso } from "@/dominio/idade";
 import { useSalvamentoAutomatico } from "@/hooks/use-salvamento-automatico";
 import { cn } from "@/lib/utils";
@@ -26,7 +33,7 @@ export function PaginaConsulta() {
   const { id } = useParams();
   const idConsulta = Number(id);
   const [carga, setCarga] = useState<Carga>({ estado: "carregando" });
-  const [erroAoFinalizar, setErroAoFinalizar] = useState(false);
+  const [erroDaAcao, setErroDaAcao] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -50,22 +57,61 @@ export function PaginaConsulta() {
     };
   }, [idConsulta]);
 
-  async function finalizar() {
+  /**
+   * Ação contextual do cabeçalho: grava no banco e aplica a mesma transição
+   * na consulta em memória — a página reflete o novo estado sem reler.
+   */
+  async function executarAcao(
+    gravar: (id: number) => Promise<void>,
+    transicao: (consulta: Consulta) => Consulta,
+    mensagemDeErro: string,
+  ) {
     if (carga.estado !== "pronto") return;
+    setErroDaAcao(null);
     try {
-      await finalizarConsulta(carga.consulta.id);
-      setCarga({
-        ...carga,
-        consulta: {
-          ...carga.consulta,
-          status: "Finalizada",
-          finalizadoEm: new Date().toISOString(),
-        },
-      });
+      await gravar(carga.consulta.id);
+      setCarga({ ...carga, consulta: transicao(carga.consulta) });
     } catch {
-      setErroAoFinalizar(true);
+      setErroDaAcao(mensagemDeErro);
     }
   }
+
+  const finalizar = () =>
+    executarAcao(
+      finalizarConsulta,
+      (consulta) => ({
+        ...consulta,
+        status: "Finalizada",
+        finalizadoEm: new Date().toISOString(),
+      }),
+      "Não foi possível finalizar a consulta.",
+    );
+
+  const efetuar = () =>
+    executarAcao(
+      efetuarPagamento,
+      (consulta) => ({
+        ...consulta,
+        pago: true,
+        pagoEm: new Date().toISOString(),
+        origemPagamento: "Direto",
+      }),
+      "Não foi possível registrar o pagamento.",
+    );
+
+  const desfazer = () =>
+    executarAcao(
+      desfazerPagamento,
+      (consulta) => ({ ...consulta, ...SEM_PAGAMENTO }),
+      "Não foi possível desfazer o pagamento.",
+    );
+
+  const cancelar = () =>
+    executarAcao(
+      cancelarConsulta,
+      (consulta) => ({ ...consulta, status: "Cancelada", ...SEM_PAGAMENTO }),
+      "Não foi possível cancelar a consulta.",
+    );
 
   if (carga.estado === "carregando") {
     return <p className="text-muted-foreground">Carregando consulta…</p>;
@@ -80,9 +126,9 @@ export function PaginaConsulta() {
   }
 
   const { consulta, paciente } = carga;
-  // Editabilidade por status (spec 2.3): Aberta e Finalizada continuam
-  // editáveis; Cancelada é somente leitura.
-  const editavel = consulta.status !== "Cancelada";
+  // A tabela de editabilidade e ações por status (spec 2.3) vive no domínio;
+  // a página só reflete a linha do estado atual.
+  const acoes = acoesDaConsulta(consulta);
 
   return (
     <section className="flex flex-col gap-6">
@@ -102,23 +148,34 @@ export function PaginaConsulta() {
         </div>
         <div className="ml-auto flex items-center gap-4">
           {consulta.status === "Aberta" ? (
-            <>
-              <TimerConsulta iniciadoEm={consulta.iniciadoEm} />
-              <Button onClick={finalizar}>Finalizar Consulta</Button>
-            </>
+            <TimerConsulta iniciadoEm={consulta.iniciadoEm} />
           ) : (
             <p className="rounded-full border px-3 py-1 text-sm">
               {consulta.status}
             </p>
           )}
+          {acoes.cancelar && (
+            <Button variant="destructive" onClick={cancelar}>
+              Cancelar Consulta
+            </Button>
+          )}
+          {acoes.efetuarPagamento && (
+            <Button variant="outline" onClick={efetuar}>
+              Efetuar Pagamento
+            </Button>
+          )}
+          {acoes.desfazerPagamento && (
+            <Button variant="outline" onClick={desfazer}>
+              Desfazer Pagamento
+            </Button>
+          )}
+          {acoes.finalizar && (
+            <Button onClick={finalizar}>Finalizar Consulta</Button>
+          )}
         </div>
       </header>
 
-      {erroAoFinalizar && (
-        <p className="text-destructive">
-          Não foi possível finalizar a consulta.
-        </p>
-      )}
+      {erroDaAcao !== null && <p className="text-destructive">{erroDaAcao}</p>}
 
       <div className="grid gap-6 md:grid-cols-2">
         <CampoDaConsulta
@@ -126,12 +183,12 @@ export function PaginaConsulta() {
           rotulo="Conteúdo"
           descricao="Relato do paciente"
           valorInicial={consulta.conteudo}
-          desabilitado={!editavel}
+          desabilitado={!acoes.camposEditaveis}
           aoSalvar={(texto) => salvarConteudo(consulta.id, texto)}
         />
         <EditorNotas
           valorInicial={consulta.notas}
-          desabilitado={!editavel}
+          desabilitado={!acoes.camposEditaveis}
           aoSalvar={(html) => salvarNotas(consulta.id, html)}
         />
       </div>

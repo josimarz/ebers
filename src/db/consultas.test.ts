@@ -11,9 +11,13 @@ import {
 } from "@/testes/plugin-sql-falso";
 import {
   buscarConsulta,
+  CancelamentoInvalidoError,
   ConsultaAbertaError,
+  cancelarConsulta,
   consultasAbertas,
   criarConsulta,
+  desfazerPagamento,
+  efetuarPagamento,
   finalizarConsulta,
   salvarConteudo,
   salvarNotas,
@@ -150,6 +154,116 @@ test("finalizarConsulta marca Finalizada com o momento, só a partir de Aberta",
   expect(chamadas).toHaveLength(1);
   expect(chamadas[0].sql).toMatch(/update "consultas" set/i);
   expect(chamadas[0].valores).toEqual([AGORA, "Finalizada", 3, "Aberta"]);
+});
+
+test("efetuarPagamento marca pago Direto agora, nunca em Cancelada nem já paga", async () => {
+  await efetuarPagamento(3);
+
+  expect(chamadas).toHaveLength(1);
+  expect(chamadas[0].sql).toMatch(/update "consultas" set/i);
+  // Pago em = agora, Pago = true, Origem = "Direto"; o where respalda a
+  // disponibilidade da spec 2.3: id, não Cancelada, não paga.
+  expect(chamadas[0].valores).toEqual([AGORA, 1, "Direto", 3, "Cancelada", 0]);
+});
+
+test("desfazerPagamento zera Pago, Pago em e Origem, só de pagamento Direto", async () => {
+  await desfazerPagamento(3);
+
+  expect(chamadas).toHaveLength(1);
+  expect(chamadas[0].sql).toMatch(/update "consultas" set/i);
+  // Crédito não é desfeito — só devolvido via cancelamento: o where exige
+  // Origem "Direto" (e, como sempre, não Cancelada).
+  expect(chamadas[0].valores).toEqual([
+    null,
+    0,
+    null,
+    3,
+    "Cancelada",
+    "Direto",
+  ]);
+});
+
+test("cancelarConsulta de Aberta não paga cancela sem mexer no extrato", async () => {
+  enfileirarSelect([linhaDeConsulta(consultaAberta({ id: 3, pacienteId: 7 }))]);
+
+  await cancelarConsulta(3);
+
+  expect(chamadas).toHaveLength(2);
+  expect(chamadas[1].sql).toMatch(/update "consultas" set/i);
+  // Status → Cancelada com o pagamento zerado; o where segura a regra: só a
+  // partir de Aberta. Nenhum insert: não havia crédito consumido.
+  expect(chamadas[1].valores).toEqual([
+    null,
+    "Cancelada",
+    0,
+    null,
+    3,
+    "Aberta",
+  ]);
+});
+
+test("cancelarConsulta paga por Crédito devolve o crédito com Movimento Estorno", async () => {
+  enfileirarSelect([
+    linhaDeConsulta(
+      consultaAberta({
+        id: 3,
+        pacienteId: 7,
+        pago: true,
+        pagoEm: AGORA,
+        origemPagamento: "Crédito",
+      }),
+    ),
+  ]);
+
+  await cancelarConsulta(3);
+
+  expect(chamadas).toHaveLength(3);
+  expect(chamadas[1].sql).toMatch(/update "consultas" set/i);
+  expect(chamadas[1].valores).toEqual([
+    null,
+    "Cancelada",
+    0,
+    null,
+    3,
+    "Aberta",
+  ]);
+  // Movimento Estorno (+1) referenciando a consulta cancelada (spec 3.3).
+  expect(chamadas[2].sql).toMatch(/insert into "movimentos_credito"/i);
+  expect(chamadas[2].valores).toEqual([7, "Estorno", 1, AGORA, 3]);
+});
+
+test("cancelarConsulta paga Direto recusa: é preciso desfazer o pagamento antes", async () => {
+  enfileirarSelect([
+    linhaDeConsulta(
+      consultaAberta({
+        id: 3,
+        pacienteId: 7,
+        pago: true,
+        pagoEm: AGORA,
+        origemPagamento: "Direto",
+      }),
+    ),
+  ]);
+
+  await expect(cancelarConsulta(3)).rejects.toBeInstanceOf(
+    CancelamentoInvalidoError,
+  );
+
+  expect(chamadas).toHaveLength(1); // só a leitura — nada gravado
+});
+
+test("cancelarConsulta de Finalizada recusa: cancelar é só para Aberta", async () => {
+  enfileirarSelect([
+    linhaDeConsulta(
+      consultaAberta({ id: 3, pacienteId: 7, status: "Finalizada" }),
+    ),
+  ]);
+
+  await expect(cancelarConsulta(3)).rejects.toBeInstanceOf(
+    CancelamentoInvalidoError,
+  );
+
+  expect(chamadas).toHaveLength(1);
 });
 
 test("consultasAbertas mapeia cada paciente para a sua Consulta Aberta", async () => {
