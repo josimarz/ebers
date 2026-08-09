@@ -5,6 +5,10 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { reiniciarComandosFalsos } from "@/testes/comandos-falsos";
 import { consultaAberta, linhaDeConsulta } from "@/testes/fixtures-consulta";
 import {
+  linhaDeMovimento,
+  movimentoDoExtrato,
+} from "@/testes/fixtures-movimento";
+import {
   dadosPacienteValidos,
   linhaDePaciente,
 } from "@/testes/fixtures-paciente";
@@ -178,7 +182,7 @@ test("feitas conta só Finalizadas, pagas só Finalizadas pagas; Créditos traz 
     "3",
     "2",
     "5",
-    "Listar consultasAcessar cadastro",
+    "Listar consultasAcessar cadastroCréditos",
   ]);
 });
 
@@ -216,6 +220,61 @@ test("Acessar cadastro leva ao formulário de edição do paciente", async () =>
 function iso(dia: number, hora: number): string {
   return new Date(2026, 7, dia, hora).toISOString();
 }
+
+test("Créditos abre o modal com o saldo e o extrato do paciente", async () => {
+  const terapeuta = userEvent.setup();
+  programarCarga([paciente(7, "Ana Lima")], [], [{ paciente_id: 7, saldo: 2 }]);
+  renderizarPagina();
+  const linha = (await screen.findByText("Ana Lima")).closest("tr");
+
+  // O modal carrega o extrato do paciente ao abrir.
+  enfileirarSelect([
+    linhaDeMovimento(movimentoDoExtrato({ id: 1, quantidade: 2 })),
+  ]);
+  await terapeuta.click(
+    within(linha as HTMLElement).getByRole("button", { name: "Créditos" }),
+  );
+
+  expect(
+    await screen.findByRole("heading", { name: "Créditos de Ana Lima" }),
+  ).toBeInTheDocument();
+  expect(await screen.findByText("2 créditos")).toBeInTheDocument();
+});
+
+test("a venda no modal atualiza a coluna Créditos da listagem", async () => {
+  const terapeuta = userEvent.setup();
+  programarCarga([paciente(7, "Ana Lima")], [], [{ paciente_id: 7, saldo: 2 }]);
+  renderizarPagina();
+  const linha = (await screen.findByText("Ana Lima")).closest("tr");
+
+  enfileirarSelect([
+    linhaDeMovimento(movimentoDoExtrato({ id: 1, quantidade: 2 })),
+  ]);
+  await terapeuta.click(
+    within(linha as HTMLElement).getByRole("button", { name: "Créditos" }),
+  );
+  await screen.findByText("2 créditos");
+
+  await terapeuta.type(screen.getByLabelText("Quantidade a vender"), "1");
+  // A venda relê o paciente, insere e o modal recarrega o extrato.
+  enfileirarSelect([paciente(7, "Ana Lima")]);
+  enfileirarSelect([
+    linhaDeMovimento(movimentoDoExtrato({ id: 1, quantidade: 2 })),
+    linhaDeMovimento(movimentoDoExtrato({ id: 2, quantidade: 1 })),
+  ]);
+  await terapeuta.click(screen.getByRole("button", { name: "Vender" }));
+  await screen.findByText("3 créditos");
+
+  await terapeuta.click(screen.getByRole("button", { name: "Fechar" }));
+
+  const celulas = within(
+    (screen.getByText("Ana Lima").closest("tr") as HTMLElement) ??
+      document.body,
+  )
+    .getAllByRole("cell")
+    .map((celula) => celula.textContent);
+  expect(celulas[4]).toBe("3");
+});
 
 test("Listar consultas abre a listagem de consultas já filtrada no paciente", async () => {
   const terapeuta = userEvent.setup();

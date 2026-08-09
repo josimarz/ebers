@@ -24,3 +24,8 @@ export function formatarData(iso: string): string {
 export function formatarHora(iso: string): string {
   return formatoHora.format(new Date(iso));
 }
+
+/** Data e hora locais de um instante ISO: "dd/mm/aaaa HH:MM". */
+export function formatarDataHora(iso: string): string {
+  return `${formatarData(iso)} ${formatarHora(iso)}`;
+}

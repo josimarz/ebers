@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatarData, formatarHora } from "./data-hora";
+import { formatarData, formatarDataHora, formatarHora } from "./data-hora";
 
 // As entradas são construídas em hora local e convertidas para ISO — o mesmo
 // caminho dos registros reais — para as expectativas valerem em qualquer fuso.
@@ -26,4 +26,10 @@ test("formatarHora preenche hora e minuto com zero à esquerda", () => {
   const iso = new Date(2026, 7, 8, 9, 5).toISOString();
 
   expect(formatarHora(iso)).toBe("09:05");
+});
+
+test("formatarDataHora junta data e hora locais", () => {
+  const iso = new Date(2026, 7, 8, 14, 30).toISOString();
+
+  expect(formatarDataHora(iso)).toBe("08/08/2026 14:30");
 });

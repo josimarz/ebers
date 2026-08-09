@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { FiltroPaciente } from "@/components/filtro-paciente";
 import { FotoPaciente } from "@/components/foto-paciente";
+import { ModalCreditos } from "@/components/modal-creditos";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -29,6 +30,18 @@ type Carga =
 export function PaginaFinanceiro() {
   const [carga, setCarga] = useState<Carga>({ estado: "carregando" });
   const [pacienteId, setPacienteId] = useState<number | null>(null);
+  const [pacienteDoModal, setPacienteDoModal] = useState<Paciente | null>(null);
+
+  // O modal avisa o novo saldo após Venda/Ajuste — a coluna Créditos
+  // acompanha sem reler o banco.
+  function atualizarSaldo(idDoPaciente: number, saldo: number) {
+    setCarga((atual) => {
+      if (atual.estado !== "pronto") return atual;
+      const saldos = new Map(atual.saldos);
+      saldos.set(idDoPaciente, saldo);
+      return { ...atual, saldos };
+    });
+  }
 
   useEffect(() => {
     let ativo = true;
@@ -73,8 +86,17 @@ export function PaginaFinanceiro() {
             saldos={carga.saldos}
             pacienteId={pacienteId}
             aoFiltrar={setPacienteId}
+            aoAbrirCreditos={setPacienteDoModal}
           />
         ))}
+
+      {pacienteDoModal !== null && (
+        <ModalCreditos
+          paciente={pacienteDoModal}
+          aoFechar={() => setPacienteDoModal(null)}
+          aoMudarSaldo={(saldo) => atualizarSaldo(pacienteDoModal.id, saldo)}
+        />
+      )}
     </section>
   );
 }
@@ -85,6 +107,7 @@ interface PropsTabelaFinanceira {
   saldos: Map<number, number>;
   pacienteId: number | null;
   aoFiltrar: (pacienteId: number | null) => void;
+  aoAbrirCreditos: (paciente: Paciente) => void;
 }
 
 function TabelaFinanceira({
@@ -93,6 +116,7 @@ function TabelaFinanceira({
   saldos,
   pacienteId,
   aoFiltrar,
+  aoAbrirCreditos,
 }: PropsTabelaFinanceira) {
   const linhas = montarLinhasFinanceiras(
     pacientes,
@@ -159,6 +183,13 @@ function TabelaFinanceira({
                       <Link to={`/pacientes/${paciente.id}/editar`}>
                         Acessar cadastro
                       </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => aoAbrirCreditos(paciente)}
+                    >
+                      Créditos
                     </Button>
                   </div>
                 </TableCell>
