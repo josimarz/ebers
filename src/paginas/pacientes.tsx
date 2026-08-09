@@ -1,6 +1,7 @@
-import { ArrowDown, ArrowUp, ChevronsUpDown, User } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { FotoPaciente } from "@/components/foto-paciente";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -181,13 +182,11 @@ function TabelaDePacientes({
                 {itens.map((paciente) => (
                   <TableRow key={paciente.id}>
                     <TableCell>
-                      {/* Placeholder até o ticket de Foto de perfil. */}
-                      <span
-                        aria-hidden="true"
-                        className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground"
-                      >
-                        <User className="size-4" />
-                      </span>
+                      <FotoPaciente
+                        arquivo={paciente.foto}
+                        nome={paciente.nomeCompleto}
+                        className="size-8"
+                      />
                     </TableCell>
                     <TableCell className="font-medium">
                       {paciente.nomeCompleto}

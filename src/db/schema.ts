@@ -10,11 +10,12 @@ import {
 
 // Cadastro do Paciente (spec 1.1). Datas em ISO (AAAA-MM-DD); dinheiro em
 // centavos (inteiro); perguntas Sim/Não como boolean; CPF só dígitos, único.
-// Foto de perfil e Créditos ficam de fora: chegam nos tickets próprios
-// (a foto vai para o sistema de arquivos; Créditos é saldo derivado).
+// `foto` guarda só o nome do arquivo — os bytes vivem no diretório fotos/ do
+// backend Rust (src-tauri/src/fotos.rs). Créditos fica de fora: saldo derivado.
 export const pacientes = sqliteTable("pacientes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   nomeCompleto: text("nome_completo").notNull(),
+  foto: text("foto"),
   dataNascimento: text("data_nascimento").notNull(),
   genero: text("genero", { enum: GENEROS }).notNull(),
   cpf: text("cpf").notNull().unique(),

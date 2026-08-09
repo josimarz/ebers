@@ -4,6 +4,11 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { DadosPaciente } from "@/dominio/paciente";
 import {
+  chamadasDeComando,
+  programarComando,
+  reiniciarComandosFalsos,
+} from "@/testes/comandos-falsos";
+import {
   dadosPacienteValidos,
   linhaDePaciente,
 } from "@/testes/fixtures-paciente";
@@ -13,12 +18,15 @@ import {
 } from "@/testes/plugin-sql-falso";
 import { PaginaPacientes } from "./pacientes";
 
-// Fronteira do sistema: o banco SQLite atrás do tauri-plugin-sql. O caminho
-// página → listarPacientes → drizzle (sqlite-proxy) roda de verdade.
+// Fronteiras do sistema: o banco SQLite atrás do tauri-plugin-sql e o comando
+// Tauri que lê fotos. O caminho página → listarPacientes → drizzle roda de
+// verdade.
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
+vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
 
 beforeEach(() => {
   reiniciarBancoFalso();
+  reiniciarComandosFalsos();
   proximoId = 1;
   // Só o relógio de parede é falso (idades estáveis); timers continuam reais
   // para não interferir no user-event e nos findBy*.
@@ -125,6 +133,31 @@ test("periodicidade e dia da semana vazios aparecem como travessão", async () =
     .getAllByRole("cell")
     .map((celula) => celula.textContent);
   expect(celulas.slice(4, 6)).toEqual(["—", "—"]);
+});
+
+test("paciente com foto aparece com a foto redonda carregada do backend", async () => {
+  enfileirarSelect([pacienteNaListagem({ foto: "foto-1.jpg" })]);
+  programarComando("carregar_foto_paciente", new Uint8Array([255, 216, 255]));
+  renderizarPagina();
+
+  const foto = await screen.findByAltText("Foto de Ana Lima");
+  expect(foto).toHaveAttribute("src", "data:image/jpeg;base64,/9j/");
+  expect(foto).toHaveClass("rounded-full");
+  expect(chamadasDeComando).toEqual([
+    {
+      comando: "carregar_foto_paciente",
+      argumentos: { arquivo: "foto-1.jpg" },
+    },
+  ]);
+});
+
+test("paciente sem foto fica com o avatar neutro, sem consultar o backend", async () => {
+  enfileirarSelect([pacienteNaListagem()]);
+  renderizarPagina();
+
+  await screen.findByText("Ana Lima");
+  expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  expect(chamadasDeComando).toHaveLength(0);
 });
 
 test("o botão Editar abre o formulário de edição do paciente", async () => {

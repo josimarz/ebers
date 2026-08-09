@@ -1,8 +1,10 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Button } from "@/components/ui/button";
+import { FotoPaciente } from "@/components/foto-paciente";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectNativo } from "@/components/ui/select-nativo";
+import { removerFoto, salvarFoto } from "@/db/fotos";
 import {
   atualizarPaciente,
   buscarPaciente,
@@ -27,6 +29,16 @@ import {
 
 type Carga = "carregando" | "pronto" | "erro";
 
+/**
+ * A foto não vive no estado do formulário de texto: ou não há foto, ou há um
+ * arquivo novo escolhido agora (com prévia local), ou o cadastro mantém a
+ * foto já gravada no backend.
+ */
+type EstadoFoto =
+  | { tipo: "sem-foto" }
+  | { tipo: "nova"; arquivo: File; previa: string }
+  | { tipo: "existente"; arquivo: string };
+
 export function PaginaFormularioPaciente() {
   const { id } = useParams();
   const idPaciente = id === undefined ? undefined : Number(id);
@@ -34,6 +46,10 @@ export function PaginaFormularioPaciente() {
 
   const [carga, setCarga] = useState<Carga>(editando ? "carregando" : "pronto");
   const [formulario, setFormulario] = useState(FORMULARIO_PACIENTE_VAZIO);
+  const [foto, setFoto] = useState<EstadoFoto>({ tipo: "sem-foto" });
+  // Foto que estava gravada ao abrir a edição: se o salvar terminar com outra
+  // (troca ou remoção), o arquivo antigo é apagado do disco.
+  const [fotoOriginal, setFotoOriginal] = useState<string | null>(null);
   const [erros, setErros] = useState<ErrosPaciente>({});
   const [tentouSalvar, setTentouSalvar] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -48,6 +64,12 @@ export function PaginaFormularioPaciente() {
         if (!ativo) return;
         if (paciente) {
           setFormulario(dadosParaFormulario(paciente));
+          setFoto(
+            paciente.foto === null
+              ? { tipo: "sem-foto" }
+              : { tipo: "existente", arquivo: paciente.foto },
+          );
+          setFotoOriginal(paciente.foto);
           setCarga("pronto");
         } else {
           setCarga("erro");
@@ -71,6 +93,17 @@ export function PaginaFormularioPaciente() {
     if (tentouSalvar) setErros(validarFormularioPaciente(proximo, hoje));
   };
 
+  function aoEscolherFoto(evento: ChangeEvent<HTMLInputElement>) {
+    const arquivo = evento.target.files?.[0];
+    // Limpa o input para o mesmo arquivo poder ser escolhido de novo.
+    evento.target.value = "";
+    if (!arquivo) return;
+    const leitor = new FileReader();
+    leitor.onload = () =>
+      setFoto({ tipo: "nova", arquivo, previa: String(leitor.result) });
+    leitor.readAsDataURL(arquivo);
+  }
+
   async function aoSalvar(evento: FormEvent) {
     evento.preventDefault();
     setTentouSalvar(true);
@@ -81,11 +114,31 @@ export function PaginaFormularioPaciente() {
     setSalvando(true);
     setErroAoSalvar(false);
     try {
-      const dados = formularioParaDados(formulario);
-      if (idPaciente === undefined) {
-        await criarPaciente(dados);
-      } else {
-        await atualizarPaciente(idPaciente, dados);
+      let nomeFoto: string | null = null;
+      if (foto.tipo === "nova") nomeFoto = await salvarFoto(foto.arquivo);
+      if (foto.tipo === "existente") nomeFoto = foto.arquivo;
+
+      try {
+        const dados = formularioParaDados(formulario, nomeFoto);
+        if (idPaciente === undefined) {
+          await criarPaciente(dados);
+        } else {
+          await atualizarPaciente(idPaciente, dados);
+        }
+      } catch (erro) {
+        // O banco recusou o cadastro (ex.: CPF duplicado): a foto que acabou
+        // de ir ao disco não pode ficar órfã; o estado "nova" regrava na
+        // próxima tentativa.
+        if (foto.tipo === "nova" && nomeFoto !== null) {
+          await removerFoto(nomeFoto).catch(() => {});
+        }
+        throw erro;
+      }
+
+      // A foto antiga só sai do disco depois de o banco aceitar o cadastro;
+      // se a remoção falhar, sobra um arquivo órfão — inofensivo.
+      if (fotoOriginal !== null && fotoOriginal !== nomeFoto) {
+        await removerFoto(fotoOriginal).catch(() => {});
       }
       navegar("/pacientes");
     } catch (erro) {
@@ -159,6 +212,52 @@ export function PaginaFormularioPaciente() {
         aria-label={editando ? "Edição de paciente" : "Cadastro de paciente"}
       >
         <SecaoFormulario titulo="Dados pessoais">
+          <div className="flex items-center gap-4 md:col-span-2">
+            {foto.tipo === "nova" ? (
+              <img
+                src={foto.previa}
+                alt="Prévia da foto de perfil"
+                className="size-20 rounded-full object-cover"
+              />
+            ) : (
+              <FotoPaciente
+                arquivo={foto.tipo === "existente" ? foto.arquivo : null}
+                nome={formulario.nomeCompleto.trim() || "perfil"}
+                className="size-20"
+              />
+            )}
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">Foto de perfil</span>
+              <div className="flex items-center gap-2">
+                <label
+                  className={buttonVariants({
+                    variant: "outline",
+                    size: "sm",
+                  })}
+                >
+                  {foto.tipo === "sem-foto" ? "Anexar foto" : "Trocar foto"}
+                  <input
+                    type="file"
+                    // Espelha os formatos que o backend decodifica (features
+                    // do crate image em src-tauri/Cargo.toml).
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={aoEscolherFoto}
+                  />
+                </label>
+                {foto.tipo !== "sem-foto" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFoto({ tipo: "sem-foto" })}
+                  >
+                    Remover foto
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
           {campoTexto("nomeCompleto", "Nome completo", { obrigatorio: true })}
           {campoTexto("dataNascimento", "Data de nascimento", {
             obrigatorio: true,

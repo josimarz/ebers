@@ -15,6 +15,13 @@
       "when": 1786230741562,
       "tag": "0001_cadastro-completo-paciente",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786233969165,
+      "tag": "0002_foto-perfil-paciente",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ Sistema de gerenciamento de pacientes e consultas para o consultório de psicolo
 - Especificação funcional: [`docs/especificacao.md`](docs/especificacao.md)
 - Glossário do domínio: [`CONTEXT.md`](CONTEXT.md)
 - Decisões de arquitetura: [`docs/adr/`](docs/adr/)
+- Operação (backup manual): [`docs/operacao.md`](docs/operacao.md)
 
 ## Stack
 
@@ -22,4 +23,4 @@ mise run test    # testes do frontend (Vitest) e do backend (cargo test)
 mise run lint    # Biome: lint + formatação
 ```
 
-O banco SQLite (`ebers.db`) é criado no diretório de dados do app na primeira execução; as migrações em [`src-tauri/migrations/`](src-tauri/migrations/) são geradas pelo `drizzle-kit` (`mise run db:generate`) e aplicadas pelo backend Rust na inicialização.
+O banco SQLite (`ebers.db`) é criado no diretório de dados do app na primeira execução, e as fotos de perfil ficam ao lado dele em `fotos/` (ver [`docs/operacao.md`](docs/operacao.md)); as migrações em [`src-tauri/migrations/`](src-tauri/migrations/) são geradas pelo `drizzle-kit` (`mise run db:generate`) e aplicadas pelo backend Rust na inicialização.

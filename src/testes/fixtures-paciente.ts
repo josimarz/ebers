@@ -10,6 +10,7 @@ export function dadosPacienteValidos(
 ): DadosPaciente {
   return {
     nomeCompleto: "Ana Lima",
+    foto: null,
     dataNascimento: "1990-03-10",
     genero: "Feminino",
     cpf: "52998224725",

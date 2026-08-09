@@ -3,6 +3,12 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { beforeEach, expect, test, vi } from "vitest";
 import {
+  chamadasDeComando,
+  programarComando,
+  programarErroDeComando,
+  reiniciarComandosFalsos,
+} from "@/testes/comandos-falsos";
+import {
   dadosPacienteValidos,
   linhaDePaciente,
 } from "@/testes/fixtures-paciente";
@@ -13,11 +19,16 @@ import {
 } from "@/testes/plugin-sql-falso";
 import { PaginaFormularioPaciente } from "./paciente-formulario";
 
-// Fronteira do sistema: o SQLite atrás do tauri-plugin-sql. O caminho
-// página → dominio → db → drizzle (sqlite-proxy) roda de verdade.
+// Fronteiras do sistema: o SQLite atrás do tauri-plugin-sql e os comandos
+// Tauri de foto atrás do invoke. O caminho página → dominio → db roda de
+// verdade.
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
+vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
 
-beforeEach(reiniciarBancoFalso);
+beforeEach(() => {
+  reiniciarBancoFalso();
+  reiniciarComandosFalsos();
+});
 
 function renderizarFormulario(rota: string) {
   return render(
@@ -66,6 +77,8 @@ async function preencherCamposObrigatorios(terapeuta: UserEvent) {
 }
 
 const salvar = () => screen.getByRole("button", { name: "Salvar" });
+
+const ultima = <T,>(itens: T[]): T | undefined => itens[itens.length - 1];
 
 test("novo cadastro nasce com o Valor da consulta pré-preenchido e editável", () => {
   renderizarFormulario("/pacientes/novo");
@@ -284,6 +297,176 @@ test("edição carrega o paciente, mostra o CPF com máscara e salva a atualiza�
   expect(atualizacao.sql).toMatch(/update "pacientes" set/i);
   expect(atualizacao.valores).toContain("Ana Lima Santos");
   expect(atualizacao.valores).toContain(7);
+});
+
+test("anexar foto mostra a prévia e salvar grava o arquivo e o nome no banco", async () => {
+  const terapeuta = userEvent.setup();
+  renderizarFormulario("/pacientes/novo");
+
+  await terapeuta.upload(
+    screen.getByLabelText("Anexar foto"),
+    new File([new Uint8Array([1, 2, 3])], "ana.png", { type: "image/png" }),
+  );
+
+  expect(
+    await screen.findByAltText("Prévia da foto de perfil"),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("Trocar foto")).toBeInTheDocument();
+
+  await preencherCamposObrigatorios(terapeuta);
+  programarComando("salvar_foto_paciente", "foto-123.jpg");
+  enfileirarSelect([{ total: 0 }]);
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("Listagem de pacientes")).toBeInTheDocument();
+  expect(chamadasDeComando).toHaveLength(1);
+  expect(chamadasDeComando[0].comando).toBe("salvar_foto_paciente");
+  expect(Array.from(chamadasDeComando[0].argumentos as Uint8Array)).toEqual([
+    1, 2, 3,
+  ]);
+  const insercao = ultima(chamadas);
+  expect(insercao?.sql).toMatch(/insert into "pacientes"/i);
+  expect(insercao?.valores).toContain("foto-123.jpg");
+});
+
+test("cadastro sem foto não aciona o backend de fotos", async () => {
+  const terapeuta = userEvent.setup();
+  renderizarFormulario("/pacientes/novo");
+  enfileirarSelect([{ total: 0 }]);
+
+  await preencherCamposObrigatorios(terapeuta);
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("Listagem de pacientes")).toBeInTheDocument();
+  expect(chamadasDeComando).toHaveLength(0);
+});
+
+/** Abre a edição do paciente 7, que tem a foto "foto-7.jpg" gravada. */
+async function abrirEdicaoComFoto() {
+  enfileirarSelect([
+    linhaDePaciente({ id: 7, ...dadosPacienteValidos({ foto: "foto-7.jpg" }) }),
+  ]);
+  programarComando("carregar_foto_paciente", new Uint8Array([9, 9]));
+  renderizarFormulario("/pacientes/7/editar");
+  await screen.findByAltText("Foto de Ana Lima");
+}
+
+test("salvar a edição sem mexer na foto preserva a foto atual", async () => {
+  const terapeuta = userEvent.setup();
+  await abrirEdicaoComFoto();
+
+  enfileirarSelect([{ total: 0 }]);
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("Listagem de pacientes")).toBeInTheDocument();
+  const atualizacao = ultima(chamadas);
+  expect(atualizacao?.sql).toMatch(/update "pacientes" set/i);
+  expect(atualizacao?.valores).toContain("foto-7.jpg");
+  // Só a leitura para exibir — nenhuma gravação ou remoção de arquivo.
+  expect(chamadasDeComando.map((chamada) => chamada.comando)).toEqual([
+    "carregar_foto_paciente",
+  ]);
+});
+
+test("remover a foto limpa o cadastro e apaga o arquivo depois de salvar", async () => {
+  const terapeuta = userEvent.setup();
+  await abrirEdicaoComFoto();
+
+  await terapeuta.click(screen.getByRole("button", { name: "Remover foto" }));
+  expect(screen.queryByAltText("Foto de Ana Lima")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Anexar foto")).toBeInTheDocument();
+
+  enfileirarSelect([{ total: 0 }]);
+  programarComando("remover_foto_paciente", null);
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("Listagem de pacientes")).toBeInTheDocument();
+  const atualizacao = ultima(chamadas);
+  expect(atualizacao?.sql).toMatch(/update "pacientes" set/i);
+  expect(atualizacao?.valores).not.toContain("foto-7.jpg");
+  expect(ultima(chamadasDeComando)).toEqual({
+    comando: "remover_foto_paciente",
+    argumentos: { arquivo: "foto-7.jpg" },
+  });
+});
+
+test("trocar a foto grava a nova e apaga a antiga depois de salvar", async () => {
+  const terapeuta = userEvent.setup();
+  await abrirEdicaoComFoto();
+
+  await terapeuta.upload(
+    screen.getByLabelText("Trocar foto"),
+    new File([new Uint8Array([4, 5])], "nova.png", { type: "image/png" }),
+  );
+  expect(
+    await screen.findByAltText("Prévia da foto de perfil"),
+  ).toBeInTheDocument();
+
+  programarComando("salvar_foto_paciente", "foto-8.jpg");
+  programarComando("remover_foto_paciente", null);
+  enfileirarSelect([{ total: 0 }]);
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("Listagem de pacientes")).toBeInTheDocument();
+  expect(ultima(chamadas)?.valores).toContain("foto-8.jpg");
+  expect(chamadasDeComando.map((chamada) => chamada.comando)).toEqual([
+    "carregar_foto_paciente",
+    "salvar_foto_paciente",
+    "remover_foto_paciente",
+  ]);
+  expect(ultima(chamadasDeComando)?.argumentos).toEqual({
+    arquivo: "foto-7.jpg",
+  });
+});
+
+test("banco recusando o cadastro apaga a foto recém-gravada em vez de deixá-la órfã", async () => {
+  const terapeuta = userEvent.setup();
+  renderizarFormulario("/pacientes/novo");
+
+  await preencherCamposObrigatorios(terapeuta);
+  await terapeuta.upload(
+    screen.getByLabelText("Anexar foto"),
+    new File([new Uint8Array([1])], "ana.png", { type: "image/png" }),
+  );
+  await screen.findByAltText("Prévia da foto de perfil");
+
+  // CPF já cadastrado: a foto foi gravada antes, mas o cadastro não entra.
+  programarComando("salvar_foto_paciente", "foto-9.jpg");
+  programarComando("remover_foto_paciente", null);
+  enfileirarSelect([{ total: 1 }]);
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("CPF já cadastrado")).toBeInTheDocument();
+  expect(chamadasDeComando.map((chamada) => chamada.comando)).toEqual([
+    "salvar_foto_paciente",
+    "remover_foto_paciente",
+  ]);
+  expect(ultima(chamadasDeComando)?.argumentos).toEqual({
+    arquivo: "foto-9.jpg",
+  });
+});
+
+test("falha ao gravar a foto avisa e não persiste o paciente", async () => {
+  const terapeuta = userEvent.setup();
+  renderizarFormulario("/pacientes/novo");
+
+  await preencherCamposObrigatorios(terapeuta);
+  await terapeuta.upload(
+    screen.getByLabelText("Anexar foto"),
+    new File([new Uint8Array([1])], "ana.png", { type: "image/png" }),
+  );
+  await screen.findByAltText("Prévia da foto de perfil");
+
+  programarErroDeComando(
+    "salvar_foto_paciente",
+    "O arquivo não é uma imagem válida",
+  );
+  await terapeuta.click(salvar());
+
+  expect(
+    await screen.findByText("Não foi possível salvar. Tente de novo."),
+  ).toBeInTheDocument();
+  expect(chamadas).toHaveLength(0);
 });
 
 test("edição de paciente inexistente avisa em vez de mostrar o formulário", async () => {

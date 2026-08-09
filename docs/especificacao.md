@@ -24,7 +24,7 @@ Escopo cortado de propósito — não são lacunas:
 
 ## Operação
 
-- **Backup manual**: copiar o arquivo do banco SQLite e o diretório de fotos, com o app fechado. O procedimento deve ser documentado para a terapeuta.
+- **Backup manual**: copiar o arquivo do banco SQLite e o diretório de fotos, com o app fechado. Procedimento documentado para a terapeuta em [`docs/operacao.md`](./operacao.md).
 - **Pré-requisito de instalação**: criptografia de disco do sistema operacional ativa (FileVault no macOS, BitLocker no Windows) — [ADR-0005](./adr/0005-criptografia-em-repouso-delegada-ao-so.md).
 
 ---

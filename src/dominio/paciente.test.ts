@@ -235,10 +235,12 @@ test("converte o formulário validado no registro do banco", () => {
       rg: "",
       telefone2: "",
     }),
+    "foto-1.jpg",
   );
 
   expect(dados).toEqual({
     nomeCompleto: "Ana Lima",
+    foto: "foto-1.jpg",
     dataNascimento: "1990-03-10",
     genero: "Feminino",
     cpf: "52998224725",
@@ -270,6 +272,7 @@ test("resposta Não descarta o que sobrou nos campos dependentes", () => {
       jaFezTerapia: "Não",
       quandoFezTerapia: "texto esquecido após trocar para Não",
     }),
+    null,
   );
   expect(dados.jaFezTerapia).toBe(false);
   expect(dados.quandoFezTerapia).toBeNull();
@@ -286,7 +289,8 @@ test("registro do banco volta ao formulário para edição", () => {
     diaSemanaConsulta: "",
   });
 
-  const volta = dadosParaFormulario(formularioParaDados(ida));
+  // A foto não passa pelo formulário: entra à parte e volta ignorada.
+  const volta = dadosParaFormulario(formularioParaDados(ida, "foto-1.jpg"));
 
   expect(volta).toEqual(ida);
 });

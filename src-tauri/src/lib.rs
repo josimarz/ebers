@@ -1,4 +1,9 @@
+use std::path::PathBuf;
+
+use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
+
+pub mod fotos;
 
 /// Mesmo banco aberto pelo frontend (src/db/executor.ts).
 pub const URL_BANCO: &str = "sqlite:ebers.db";
@@ -19,7 +24,50 @@ pub fn migracoes() -> Vec<Migration> {
             sql: include_str!("../migrations/0001_cadastro-completo-paciente.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "foto_perfil_paciente",
+            sql: include_str!("../migrations/0002_foto-perfil-paciente.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
+}
+
+/// Diretório das fotos de perfil: `fotos/` dentro do diretório de configuração
+/// do app — a mesma base onde o tauri-plugin-sql cria o `ebers.db`, para o
+/// backup manual (spec, Operação) copiar banco e fotos de um lugar só.
+fn diretorio_de_fotos(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let base = app
+        .path()
+        .app_config_dir()
+        .map_err(|erro| format!("Diretório de dados do app indisponível: {erro}"))?;
+    Ok(base.join(fotos::DIRETORIO_FOTOS))
+}
+
+/// Recebe os bytes da imagem como corpo bruto do invoke (sem custo de JSON)
+/// e devolve o nome do arquivo gravado, que o frontend persiste em `foto`.
+#[tauri::command]
+fn salvar_foto_paciente(
+    app: tauri::AppHandle,
+    requisicao: tauri::ipc::Request<'_>,
+) -> Result<String, String> {
+    let tauri::ipc::InvokeBody::Raw(dados) = requisicao.body() else {
+        return Err("Esperava os bytes da imagem no corpo da chamada".into());
+    };
+    fotos::salvar(&diretorio_de_fotos(&app)?, dados)
+}
+
+#[tauri::command]
+fn carregar_foto_paciente(
+    app: tauri::AppHandle,
+    arquivo: String,
+) -> Result<tauri::ipc::Response, String> {
+    fotos::carregar(&diretorio_de_fotos(&app)?, &arquivo).map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+fn remover_foto_paciente(app: tauri::AppHandle, arquivo: String) -> Result<(), String> {
+    fotos::remover(&diretorio_de_fotos(&app)?, &arquivo)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -31,6 +79,11 @@ pub fn run() {
                 .add_migrations(URL_BANCO, migracoes())
                 .build(),
         )
+        .invoke_handler(tauri::generate_handler![
+            salvar_foto_paciente,
+            carregar_foto_paciente,
+            remover_foto_paciente
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -113,6 +166,32 @@ mod testes {
 
         assert_eq!(nome, "Ana Lima");
         assert_eq!(valor, 25000);
+    }
+
+    #[test]
+    fn foto_de_perfil_e_opcional_e_guarda_o_nome_do_arquivo() {
+        let conexao = banco_migrado();
+
+        // Cadastro sem foto continua válido (campo opcional na spec 1.1).
+        inserir_paciente(&conexao, "Ana Lima", "52998224725")
+            .expect("inserir paciente sem foto");
+
+        conexao
+            .execute(
+                "UPDATE pacientes SET foto = 'foto-1.jpg' WHERE cpf = '52998224725'",
+                [],
+            )
+            .expect("gravar o nome do arquivo da foto");
+
+        let foto: Option<String> = conexao
+            .query_row(
+                "SELECT foto FROM pacientes WHERE cpf = '52998224725'",
+                [],
+                |linha| linha.get(0),
+            )
+            .expect("consultar a foto do paciente");
+
+        assert_eq!(foto.as_deref(), Some("foto-1.jpg"));
     }
 
     #[test]

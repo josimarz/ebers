@@ -224,6 +224,8 @@ function ehEmailValido(email: string): boolean {
 /** Registro de Paciente como vai ao banco (sem id): tipos do domínio. */
 export interface DadosPaciente {
   nomeCompleto: string;
+  /** Nome do arquivo no diretório de fotos do backend; null = sem foto. */
+  foto: string | null;
   dataNascimento: string;
   genero: Genero;
   cpf: string;
@@ -251,8 +253,13 @@ export interface DadosPaciente {
 /**
  * Converte o formulário já validado no registro do banco. CPF é normalizado
  * para só dígitos; campos dependentes de uma resposta "Não" são descartados.
+ * A foto não é um campo do formulário: é o nome de arquivo devolvido pelo
+ * backend ao gravar a imagem, decidido pela página na hora de salvar.
  */
-export function formularioParaDados(dados: FormularioPaciente): DadosPaciente {
+export function formularioParaDados(
+  dados: FormularioPaciente,
+  foto: string | null,
+): DadosPaciente {
   const texto = (valor: string): string | null => {
     const aparado = valor.trim();
     return aparado === "" ? null : aparado;
@@ -262,6 +269,7 @@ export function formularioParaDados(dados: FormularioPaciente): DadosPaciente {
 
   return {
     nomeCompleto: dados.nomeCompleto.trim(),
+    foto,
     dataNascimento: dados.dataNascimento,
     genero: dados.genero as Genero,
     cpf: dados.cpf.replace(/\D/g, ""),
