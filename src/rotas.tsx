@@ -2,6 +2,8 @@ import { NotebookPen, Users, Wallet } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
 import { LayoutApp } from "@/layout/layout-app";
+import { modoTablet } from "@/lib/modo";
+import { PaginaAutoCadastro } from "@/paginas/auto-cadastro";
 import { PaginaConsultas } from "@/paginas/consultas";
 import { PaginaFinanceiro } from "@/paginas/financeiro";
 import { PaginaFormularioPaciente } from "@/paginas/paciente-formulario";
@@ -37,6 +39,16 @@ export const secoes: Secao[] = [
 ];
 
 export function Rotas() {
+  // Navegador da rede local (sem window.__TAURI__): só existe o Auto-cadastro
+  // — qualquer caminho cai nele, sem sidebar e sem saída (spec 1.3).
+  if (modoTablet()) {
+    return (
+      <Routes>
+        <Route path="*" element={<PaginaAutoCadastro />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       <Route element={<LayoutApp />}>

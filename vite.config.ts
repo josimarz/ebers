@@ -34,6 +34,12 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    // Modo tablet em desenvolvimento: em `tauri dev` a SPA não fica embutida
+    // no binário, então o tablet acessa o Vite (TAURI_DEV_HOST) e as rotas do
+    // Auto-cadastro são repassadas ao servidor Axum do app (servidor.rs).
+    proxy: {
+      "/api": "http://localhost:8738",
+    },
     hmr: host
       ? {
           protocol: "ws",

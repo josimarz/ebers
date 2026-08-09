@@ -1,10 +1,28 @@
-# Operação: backup manual
+# Operação
 
-Guia para a terapeuta. Todos os dados do Ebers vivem em **uma única pasta** do
+Guia para a terapeuta.
+
+## Auto-cadastro no tablet
+
+Com o Ebers aberto, qualquer navegador na mesma rede Wi-Fi do consultório
+mostra o Auto-cadastro — sem instalar nada no tablet:
+
+1. Descubra o IP do computador do consultório (macOS: Ajustes do Sistema →
+   Wi-Fi → Detalhes; Windows: Configurações → Rede e Internet).
+2. No navegador do tablet, acesse `http://IP-do-computador:8738` (ex.:
+   `http://192.168.0.10:8738`) e salve nos favoritos.
+
+Pela rede só existe o formulário de Auto-cadastro; as demais telas ficam
+restritas ao app no computador
+([ADR-0003](./adr/0003-rede-local-sem-autenticacao.md)).
+
+## Backup manual
+
+Todos os dados do Ebers vivem em **uma única pasta** do
 computador — o banco de dados (`ebers.db`) e as fotos de perfil (subpasta
 `fotos/`). Copiar essa pasta é o backup completo.
 
-## Onde ficam os dados
+### Onde ficam os dados
 
 | Sistema | Pasta de dados do Ebers |
 | --- | --- |
@@ -17,7 +35,7 @@ Dentro dela:
 - `ebers.db` — o banco com todos os cadastros, consultas e anotações;
 - `fotos/` — as fotos de perfil dos pacientes.
 
-## Como fazer o backup
+### Como fazer o backup
 
 1. **Feche o Ebers** (o app não pode estar aberto durante a cópia).
 2. Copie a pasta de dados inteira (tabela acima) para o destino do backup —

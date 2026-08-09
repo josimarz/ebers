@@ -74,10 +74,11 @@ pub fn remover(diretorio: &Path, arquivo: &str) -> Result<(), String> {
         .map_err(|erro| format!("Não foi possível remover a foto: {erro}"))
 }
 
-/// Os nomes gravados no banco vêm de `nome_unico`, mas os comandos são uma
-/// fronteira: um nome com separadores ou `..` sairia do diretório de fotos.
-/// Só passa o que é um único componente de caminho.
-fn nome_validado(arquivo: &str) -> Result<&str, String> {
+/// Os nomes gravados no banco vêm de `nome_unico`, mas os comandos — e a rota
+/// de Auto-cadastro (servidor.rs) — são fronteiras: um nome com separadores ou
+/// `..` sairia do diretório de fotos. Só passa o que é um único componente de
+/// caminho.
+pub(crate) fn nome_validado(arquivo: &str) -> Result<&str, String> {
     let componente_unico = Path::new(arquivo)
         .file_name()
         .is_some_and(|nome| nome == arquivo);

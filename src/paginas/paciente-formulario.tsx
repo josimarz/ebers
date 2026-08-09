@@ -4,6 +4,10 @@ import { FotoPaciente } from "@/components/foto-paciente";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectNativo } from "@/components/ui/select-nativo";
+import {
+  criarPacienteAutoCadastro,
+  salvarFotoAutoCadastro,
+} from "@/db/auto-cadastro";
 import { removerFoto, salvarFoto } from "@/db/fotos";
 import {
   atualizarPaciente,
@@ -39,9 +43,21 @@ type EstadoFoto =
   | { tipo: "nova"; arquivo: File; previa: string }
   | { tipo: "existente"; arquivo: string };
 
-export function PaginaFormularioPaciente() {
+export type ModoFormularioPaciente = "desktop" | "tablet";
+
+export function PaginaFormularioPaciente({
+  modo = "desktop",
+}: {
+  /**
+   * No Modo tablet (Auto-cadastro, spec 1.3) o formulário só cria Pacientes:
+   * esconde os campos da Terapeuta, persiste pelas rotas REST do servidor
+   * local e termina em "Cadastro recebido!" com o formulário em branco.
+   */
+  modo?: ModoFormularioPaciente;
+}) {
+  const tablet = modo === "tablet";
   const { id } = useParams();
-  const idPaciente = id === undefined ? undefined : Number(id);
+  const idPaciente = tablet || id === undefined ? undefined : Number(id);
   const editando = idPaciente !== undefined;
 
   const [carga, setCarga] = useState<Carga>(editando ? "carregando" : "pronto");
@@ -54,6 +70,9 @@ export function PaginaFormularioPaciente() {
   const [tentouSalvar, setTentouSalvar] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erroAoSalvar, setErroAoSalvar] = useState(false);
+  // Tela de confirmação do Auto-cadastro (spec 1.3), entre um envio e o
+  // próximo paciente.
+  const [cadastroRecebido, setCadastroRecebido] = useState(false);
   const navegar = useNavigate();
 
   useEffect(() => {
@@ -85,6 +104,11 @@ export function PaginaFormularioPaciente() {
 
   const hoje = hojeIso();
   const menorDeIdade = ehMenorDeIdade(formulario.dataNascimento, hoje);
+  // No tablet quem toca é o Paciente, "enviando" o próprio cadastro; no
+  // desktop é a Terapeuta salvando um registro.
+  const rotulosEnvio = tablet
+    ? { botao: "Enviar", executando: "Enviando…" }
+    : { botao: "Salvar", executando: "Salvando…" };
 
   const alterar = (campo: keyof FormularioPaciente) => (valor: string) => {
     const proximo = { ...formulario, [campo]: valor };
@@ -115,12 +139,18 @@ export function PaginaFormularioPaciente() {
     setErroAoSalvar(false);
     try {
       let nomeFoto: string | null = null;
-      if (foto.tipo === "nova") nomeFoto = await salvarFoto(foto.arquivo);
+      if (foto.tipo === "nova") {
+        nomeFoto = tablet
+          ? await salvarFotoAutoCadastro(foto.arquivo)
+          : await salvarFoto(foto.arquivo);
+      }
       if (foto.tipo === "existente") nomeFoto = foto.arquivo;
 
       try {
         const dados = formularioParaDados(formulario, nomeFoto);
-        if (idPaciente === undefined) {
+        if (tablet) {
+          await criarPacienteAutoCadastro(dados);
+        } else if (idPaciente === undefined) {
           await criarPaciente(dados);
         } else {
           await atualizarPaciente(idPaciente, dados);
@@ -128,11 +158,25 @@ export function PaginaFormularioPaciente() {
       } catch (erro) {
         // O banco recusou o cadastro (ex.: CPF duplicado): a foto que acabou
         // de ir ao disco não pode ficar órfã; o estado "nova" regrava na
-        // próxima tentativa.
-        if (foto.tipo === "nova" && nomeFoto !== null) {
+        // próxima tentativa. O tablet não tem rota de remoção (as rotas do
+        // Auto-cadastro só criam — ADR-0003): o arquivo fica órfão no disco,
+        // inofensivo, sem cadastro que o referencie.
+        if (!tablet && foto.tipo === "nova" && nomeFoto !== null) {
           await removerFoto(nomeFoto).catch(() => {});
         }
         throw erro;
+      }
+
+      if (tablet) {
+        // "Cadastro recebido!" e formulário em branco para o próximo
+        // paciente (spec 1.3).
+        setCadastroRecebido(true);
+        setFormulario(FORMULARIO_PACIENTE_VAZIO);
+        setFoto({ tipo: "sem-foto" });
+        setErros({});
+        setTentouSalvar(false);
+        setSalvando(false);
+        return;
       }
 
       // A foto antiga só sai do disco depois de o banco aceitar o cadastro;
@@ -143,12 +187,32 @@ export function PaginaFormularioPaciente() {
       navegar("/pacientes");
     } catch (erro) {
       if (erro instanceof CpfJaCadastradoError) {
-        setErros({ cpf: "CPF já cadastrado" });
+        setErros({
+          cpf: tablet
+            ? "CPF já cadastrado — chame a terapeuta"
+            : "CPF já cadastrado",
+        });
       } else {
         setErroAoSalvar(true);
       }
       setSalvando(false);
     }
+  }
+
+  if (cadastroRecebido) {
+    return (
+      <section className="glass-bg flex max-w-3xl flex-col items-center gap-4 rounded-xl p-10 text-center">
+        <h2 className="font-heading text-2xl font-semibold">
+          Cadastro recebido!
+        </h2>
+        <p className="text-muted-foreground">
+          Obrigada! Pode devolver o tablet.
+        </p>
+        <Button type="button" onClick={() => setCadastroRecebido(false)}>
+          Iniciar novo cadastro
+        </Button>
+      </section>
+    );
   }
 
   if (carga === "carregando") {
@@ -201,15 +265,32 @@ export function PaginaFormularioPaciente() {
 
   return (
     <section className="flex max-w-3xl flex-col gap-6">
-      <h1 className="font-heading text-2xl font-semibold">
-        {editando ? "Editar Paciente" : "Novo Paciente"}
-      </h1>
+      <header className="flex flex-col gap-1">
+        <h1 className="font-heading text-2xl font-semibold">
+          {tablet
+            ? "Auto-cadastro"
+            : editando
+              ? "Editar Paciente"
+              : "Novo Paciente"}
+        </h1>
+        {tablet && (
+          <p className="text-muted-foreground">
+            Preencha seus dados e toque em Enviar ao final.
+          </p>
+        )}
+      </header>
 
       <form
         noValidate
         onSubmit={aoSalvar}
         className="flex flex-col gap-6"
-        aria-label={editando ? "Edição de paciente" : "Cadastro de paciente"}
+        aria-label={
+          tablet
+            ? "Auto-cadastro de paciente"
+            : editando
+              ? "Edição de paciente"
+              : "Cadastro de paciente"
+        }
       >
         <SecaoFormulario titulo="Dados pessoais">
           <div className="flex items-center gap-4 md:col-span-2">
@@ -341,29 +422,36 @@ export function PaginaFormularioPaciente() {
           )}
         </SecaoFormulario>
 
-        <SecaoFormulario titulo="Consulta">
-          {campoTexto("valorConsulta", "Valor da consulta (R$)", {
-            obrigatorio: true,
-          })}
-          {campoSelect(
-            "periodicidade",
-            "Periodicidade da consulta",
-            PERIODICIDADES,
-          )}
-          {campoSelect(
-            "diaSemanaConsulta",
-            "Dia da semana da consulta",
-            DIAS_SEMANA_CONSULTA,
-          )}
-        </SecaoFormulario>
+        {/* Campos que só a Terapeuta define — ocultos no Auto-cadastro
+            (spec 1.3); o Valor da consulta recebe o padrão no servidor. */}
+        {!tablet && (
+          <SecaoFormulario titulo="Consulta">
+            {campoTexto("valorConsulta", "Valor da consulta (R$)", {
+              obrigatorio: true,
+            })}
+            {campoSelect(
+              "periodicidade",
+              "Periodicidade da consulta",
+              PERIODICIDADES,
+            )}
+            {campoSelect(
+              "diaSemanaConsulta",
+              "Dia da semana da consulta",
+              DIAS_SEMANA_CONSULTA,
+            )}
+          </SecaoFormulario>
+        )}
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={salvando}>
-            {salvando ? "Salvando…" : "Salvar"}
+            {salvando ? rotulosEnvio.executando : rotulosEnvio.botao}
           </Button>
-          <Button type="button" variant="outline" asChild>
-            <Link to="/pacientes">Cancelar</Link>
-          </Button>
+          {/* No tablet não há para onde sair da tela de cadastro. */}
+          {!tablet && (
+            <Button type="button" variant="outline" asChild>
+              <Link to="/pacientes">Cancelar</Link>
+            </Button>
+          )}
           {erroAoSalvar && (
             <p className="text-sm text-destructive">
               Não foi possível salvar. Tente de novo.

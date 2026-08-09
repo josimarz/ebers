@@ -1,9 +1,14 @@
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { Rotas } from "@/rotas";
+import { encerrarModoDesktop, simularModoDesktop } from "@/testes/modo-desktop";
 
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-vazio"));
+
+// Estas telas são o Modo desktop: o layout só aparece dentro do webview do app.
+beforeEach(simularModoDesktop);
+afterEach(encerrarModoDesktop);
 
 function renderizarApp(caminho = "/") {
   return render(

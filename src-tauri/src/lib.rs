@@ -3,10 +3,16 @@ use std::path::PathBuf;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+pub mod cpf;
 pub mod fotos;
+pub mod servidor;
 
 /// Mesmo banco aberto pelo frontend (src/db/executor.ts).
 pub const URL_BANCO: &str = "sqlite:ebers.db";
+
+/// O arquivo que o tauri-plugin-sql cria para URL_BANCO, dentro do diretório
+/// de configuração do app.
+pub const ARQUIVO_BANCO: &str = "ebers.db";
 
 /// Migrações geradas pelo drizzle-kit (src-tauri/migrations), aplicadas pelo
 /// tauri-plugin-sql na inicialização do app.
@@ -36,12 +42,20 @@ pub fn migracoes() -> Vec<Migration> {
 /// Diretório das fotos de perfil: `fotos/` dentro do diretório de configuração
 /// do app — a mesma base onde o tauri-plugin-sql cria o `ebers.db`, para o
 /// backup manual (spec, Operação) copiar banco e fotos de um lugar só.
-fn diretorio_de_fotos(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let base = app
-        .path()
+fn diretorio_de_dados(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
         .app_config_dir()
-        .map_err(|erro| format!("Diretório de dados do app indisponível: {erro}"))?;
-    Ok(base.join(fotos::DIRETORIO_FOTOS))
+        .map_err(|erro| format!("Diretório de dados do app indisponível: {erro}"))
+}
+
+pub(crate) fn diretorio_de_fotos(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(diretorio_de_dados(app)?.join(fotos::DIRETORIO_FOTOS))
+}
+
+/// Caminho do `ebers.db` no disco — o mesmo arquivo que o tauri-plugin-sql
+/// abre para URL_BANCO; as rotas do Auto-cadastro (servidor.rs) gravam nele.
+pub(crate) fn caminho_do_banco(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(diretorio_de_dados(app)?.join(ARQUIVO_BANCO))
 }
 
 /// Recebe os bytes da imagem como corpo bruto do invoke (sem custo de JSON)
@@ -84,6 +98,14 @@ pub fn run() {
             carregar_foto_paciente,
             remover_foto_paciente
         ])
+        .setup(|app| {
+            // O servidor do Auto-cadastro sobe junto com o app (spec 5.1);
+            // uma falha aqui não impede o modo desktop de funcionar.
+            if let Err(erro) = servidor::iniciar(app.handle()) {
+                eprintln!("Servidor do Auto-cadastro não subiu: {erro}");
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
