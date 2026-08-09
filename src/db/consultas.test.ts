@@ -19,6 +19,7 @@ import {
   desfazerPagamento,
   efetuarPagamento,
   finalizarConsulta,
+  listarConsultas,
   salvarConteudo,
   salvarNotas,
 } from "./consultas";
@@ -264,6 +265,48 @@ test("cancelarConsulta de Finalizada recusa: cancelar é só para Aberta", async
   );
 
   expect(chamadas).toHaveLength(1);
+});
+
+test("listarConsultas devolve todas as consultas decodificadas, de qualquer status", async () => {
+  enfileirarSelect([
+    linhaDeConsulta(consultaAberta({ id: 1, pacienteId: 7 })),
+    linhaDeConsulta(
+      consultaAberta({
+        id: 2,
+        pacienteId: 9,
+        status: "Cancelada",
+      }),
+    ),
+    linhaDeConsulta(
+      consultaAberta({
+        id: 3,
+        pacienteId: 7,
+        status: "Finalizada",
+        finalizadoEm: "2026-08-08T15:00:00.000Z",
+        pago: true,
+        pagoEm: AGORA,
+        origemPagamento: "Direto",
+      }),
+    ),
+  ]);
+
+  const lista = await listarConsultas();
+
+  expect(lista).toEqual([
+    consultaAberta({ id: 1, pacienteId: 7 }),
+    consultaAberta({ id: 2, pacienteId: 9, status: "Cancelada" }),
+    consultaAberta({
+      id: 3,
+      pacienteId: 7,
+      status: "Finalizada",
+      finalizadoEm: "2026-08-08T15:00:00.000Z",
+      pago: true,
+      pagoEm: AGORA,
+      origemPagamento: "Direto",
+    }),
+  ]);
+  expect(chamadas).toHaveLength(1);
+  expect(chamadas[0].sql).toMatch(/select .* from "consultas"/i);
 });
 
 test("consultasAbertas mapeia cada paciente para a sua Consulta Aberta", async () => {

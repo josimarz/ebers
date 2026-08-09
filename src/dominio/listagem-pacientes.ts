@@ -1,9 +1,9 @@
-// Listagem de Pacientes (spec 1.2): busca, ordenação e paginação em memória.
-// O SQLite (NOCASE) não compara pt-BR ignorando acentos, e o volume de um
-// consultório de uma única Terapeuta é pequeno — a página carrega todos os
-// Pacientes e o recorte acontece aqui, em funções puras.
+// Listagem de Pacientes (spec 1.2): busca, ordenação e paginação em memória,
+// em funções puras (ver dominio/paginacao.ts e dominio/busca.ts).
 
-export const PACIENTES_POR_PAGINA = 10;
+import { colacaoPtBr, filtrarPorNome } from "./busca";
+import { compararIso } from "./data-hora";
+import { type Pagina, paginar } from "./paginacao";
 
 export interface OrdenacaoPacientes {
   coluna: "nome" | "idade";
@@ -14,13 +14,6 @@ export interface ParametrosListagem {
   busca: string;
   ordenacao: OrdenacaoPacientes;
   pagina: number;
-}
-
-export interface PaginaDePacientes<P> {
-  itens: P[];
-  /** Página efetivamente exibida, já trazida para dentro do intervalo. */
-  pagina: number;
-  totalPaginas: number;
 }
 
 interface CamposDeListagem {
@@ -35,18 +28,6 @@ export function alternarOrdenacao(
 ): OrdenacaoPacientes {
   if (atual.coluna !== coluna) return { coluna, direcao: "asc" };
   return { coluna, direcao: atual.direcao === "asc" ? "desc" : "asc" };
-}
-
-const colacaoPtBr = new Intl.Collator("pt-BR", { sensitivity: "base" });
-
-function normalizarParaBusca(texto: string): string {
-  return texto.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-}
-
-/** Datas em ISO (AAAA-MM-DD) comparam cronologicamente como texto. */
-function compararIso(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
 }
 
 function comparador(ordenacao: OrdenacaoPacientes) {
@@ -65,32 +46,14 @@ function comparador(ordenacao: OrdenacaoPacientes) {
 
 /**
  * Recorta a listagem completa de Pacientes na página a exibir: filtra pela
- * busca (ignorando acentos e caixa), ordena e pagina. A página pedida é
- * trazida para dentro do intervalo válido — uma busca que encolhe o
- * resultado nunca deixa a Terapeuta numa página inexistente.
+ * busca (ignorando acentos e caixa), ordena e pagina.
  */
 export function montarPaginaDePacientes<P extends CamposDeListagem>(
   pacientes: readonly P[],
   { busca, ordenacao, pagina }: ParametrosListagem,
-): PaginaDePacientes<P> {
-  const termo = normalizarParaBusca(busca.trim());
-  const filtrados = pacientes.filter(
-    (paciente) =>
-      termo === "" ||
-      normalizarParaBusca(paciente.nomeCompleto).includes(termo),
-  );
+): Pagina<P> {
+  const filtrados = filtrarPorNome(pacientes, busca);
   filtrados.sort(comparador(ordenacao));
 
-  const totalPaginas = Math.max(
-    1,
-    Math.ceil(filtrados.length / PACIENTES_POR_PAGINA),
-  );
-  const paginaExibida = Math.min(Math.max(pagina, 1), totalPaginas);
-  const inicio = (paginaExibida - 1) * PACIENTES_POR_PAGINA;
-
-  return {
-    itens: filtrados.slice(inicio, inicio + PACIENTES_POR_PAGINA),
-    pagina: paginaExibida,
-    totalPaginas,
-  };
+  return paginar(filtrados, pagina);
 }

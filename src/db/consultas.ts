@@ -32,6 +32,14 @@ export async function consultasAbertas(): Promise<Map<number, number>> {
   return new Map(linhas.map((linha) => [linha.pacienteId, linha.id]));
 }
 
+/**
+ * Todas as Consultas, de qualquer status, para a listagem (spec 2.4) —
+ * filtro, ordenação e paginação acontecem em memória no domínio.
+ */
+export async function listarConsultas(): Promise<Consulta[]> {
+  return banco.select().from(consultas);
+}
+
 async function consultaAbertaDoPaciente(
   pacienteId: number,
 ): Promise<Consulta | undefined> {
