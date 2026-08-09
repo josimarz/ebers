@@ -392,3 +392,59 @@
     transform: translateX(100%);
   }
 }
+
+/*
+ * Tipografia dentro do editor de Notas (spec 2.3). O preflight do Tailwind
+ * zera títulos e listas; aqui eles voltam a ter aparência — só no editor,
+ * onde o HTML é da terapeuta e não da interface.
+ */
+@layer components {
+  .editor-notas .tiptap > * + * {
+    margin-top: 0.5em;
+  }
+
+  .editor-notas .tiptap h1,
+  .editor-notas .tiptap h2,
+  .editor-notas .tiptap h3,
+  .editor-notas .tiptap h4,
+  .editor-notas .tiptap h5,
+  .editor-notas .tiptap h6 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .editor-notas .tiptap h1 {
+    font-size: 1.875rem;
+  }
+  .editor-notas .tiptap h2 {
+    font-size: 1.5rem;
+  }
+  .editor-notas .tiptap h3 {
+    font-size: 1.25rem;
+  }
+  .editor-notas .tiptap h4 {
+    font-size: 1.125rem;
+  }
+  .editor-notas .tiptap h5 {
+    font-size: 1rem;
+  }
+  .editor-notas .tiptap h6 {
+    font-size: 0.875rem;
+  }
+
+  /* Atalhos de markdown do editor criam listas e citações mesmo sem botão. */
+  .editor-notas .tiptap ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+  }
+  .editor-notas .tiptap ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+  .editor-notas .tiptap blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 0.75rem;
+    color: var(--muted-foreground);
+  }
+}

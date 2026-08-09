@@ -34,3 +34,30 @@ if (!("ResizeObserver" in window)) {
   (window as unknown as { ResizeObserver: unknown }).ResizeObserver =
     ResizeObserverShim;
 }
+
+// O ProseMirror (editor de Notas) mede a posição da seleção para rolá-la até
+// a tela; o jsdom não implementa as APIs de layout que ele consulta.
+function retanguloVazio(): DOMRect {
+  return {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: 0,
+    height: 0,
+    toJSON: () => ({}),
+  };
+}
+if (!Range.prototype.getClientRects) {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = retanguloVazio;
+}
+if (!Element.prototype.getClientRects) {
+  Element.prototype.getClientRects = () =>
+    [retanguloVazio()] as unknown as DOMRectList;
+}
+if (!Document.prototype.elementFromPoint) {
+  Document.prototype.elementFromPoint = () => null;
+}

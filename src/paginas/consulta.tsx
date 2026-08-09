@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router";
+import { EditorNotas } from "@/components/editor-notas";
 import { FotoPaciente } from "@/components/foto-paciente";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
 import { buscarPaciente, type Paciente } from "@/db/pacientes";
 import { timerDaConsulta } from "@/dominio/consulta";
 import { calcularIdade, hojeIso } from "@/dominio/idade";
+import { useSalvamentoAutomatico } from "@/hooks/use-salvamento-automatico";
 import { cn } from "@/lib/utils";
 
 type Carga =
@@ -127,13 +129,10 @@ export function PaginaConsulta() {
           desabilitado={!editavel}
           aoSalvar={(texto) => salvarConteudo(consulta.id, texto)}
         />
-        <CampoDaConsulta
-          id="notas"
-          rotulo="Notas"
-          descricao="Anotações da terapeuta"
+        <EditorNotas
           valorInicial={consulta.notas}
           desabilitado={!editavel}
-          aoSalvar={(texto) => salvarNotas(consulta.id, texto)}
+          aoSalvar={(html) => salvarNotas(consulta.id, html)}
         />
       </div>
     </section>
@@ -174,11 +173,6 @@ function TimerConsulta({ iniciadoEm }: { iniciadoEm: string }) {
   );
 }
 
-/** Pausa de digitação que dispara o salvamento automático. */
-const ATRASO_SALVAMENTO_MS = 600;
-/** Digitação (ou transcrição) contínua nunca espera mais que isto. */
-const ESPERA_MAXIMA_SALVAMENTO_MS = 2000;
-
 interface PropsCampoDaConsulta {
   id: string;
   rotulo: string;
@@ -188,11 +182,7 @@ interface PropsCampoDaConsulta {
   aoSalvar: (texto: string) => Promise<void>;
 }
 
-/**
- * Campo de texto da Consulta com salvamento automático (spec 2.3): sem botão
- * "Salvar", o texto é persistido na pausa da digitação — e, sob digitação
- * contínua, no máximo a cada ESPERA_MAXIMA_SALVAMENTO_MS.
- */
+/** Campo de texto plano da Consulta com salvamento automático (spec 2.3). */
 function CampoDaConsulta({
   id,
   rotulo,
@@ -202,37 +192,7 @@ function CampoDaConsulta({
   aoSalvar,
 }: PropsCampoDaConsulta) {
   const [valor, setValor] = useState(valorInicial);
-  const pendenteDesdeMs = useRef<number | null>(null);
-  const atual = useRef({ valor, aoSalvar });
-  atual.current = { valor, aoSalvar };
-
-  useEffect(() => {
-    if (pendenteDesdeMs.current === null) return;
-    const prazoMaximo =
-      pendenteDesdeMs.current + ESPERA_MAXIMA_SALVAMENTO_MS - Date.now();
-    const espera = Math.max(0, Math.min(ATRASO_SALVAMENTO_MS, prazoMaximo));
-    const temporizador = setTimeout(() => {
-      pendenteDesdeMs.current = null;
-      aoSalvar(valor).catch(() => {
-        // Falha de gravação: o texto segue na tela como pendente, e a
-        // próxima alteração dispara nova tentativa.
-        pendenteDesdeMs.current ??= Date.now();
-      });
-    }, espera);
-    return () => clearTimeout(temporizador);
-  }, [valor, aoSalvar]);
-
-  // Sair da página no meio da pausa (ex.: navegar pela sidebar) não pode
-  // descartar o que ainda não foi gravado: o desmonte faz o flush imediato.
-  useEffect(() => {
-    return () => {
-      if (pendenteDesdeMs.current === null) return;
-      pendenteDesdeMs.current = null;
-      atual.current.aoSalvar(atual.current.valor).catch(() => {
-        // Desmontado: não há mais tela para sinalizar a falha.
-      });
-    };
-  }, []);
+  const registrar = useSalvamentoAutomatico(aoSalvar);
 
   return (
     <div className="flex flex-col gap-2">
@@ -247,8 +207,8 @@ function CampoDaConsulta({
         value={valor}
         disabled={desabilitado}
         onChange={(evento) => {
-          pendenteDesdeMs.current ??= Date.now();
           setValor(evento.target.value);
+          registrar(evento.target.value);
         }}
         className="glass-bg min-h-64 flex-1 resize-y rounded-xl p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
       />

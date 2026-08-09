@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -73,7 +73,10 @@ function terapeutaComTimersFalsos() {
 }
 
 test("o cabeçalho traz nome, idade e timer verde; Conteúdo e Notas vêm carregados", async () => {
-  carregarConsulta({ conteudo: "Relato até aqui", notas: "Hipóteses" });
+  carregarConsulta({
+    conteudo: "Relato até aqui",
+    notas: "<p>Hipóteses</p>",
+  });
   await renderizarPagina();
 
   expect(screen.getByRole("heading", { name: "Ana Lima" })).toBeInTheDocument();
@@ -84,10 +87,55 @@ test("o cabeçalho traz nome, idade e timer verde; Conteúdo e Notas vêm carreg
   expect(timer).toHaveClass("text-chart-2");
 
   expect(screen.getByLabelText("Conteúdo")).toHaveValue("Relato até aqui");
-  expect(screen.getByLabelText("Notas")).toHaveValue("Hipóteses");
+  expect(screen.getByLabelText("Notas")).toHaveTextContent("Hipóteses");
   expect(
     screen.getByRole("button", { name: "Finalizar Consulta" }),
   ).toBeInTheDocument();
+});
+
+test("as Notas re-renderizam fielmente o HTML salvo", async () => {
+  carregarConsulta({
+    notas:
+      '<h2>Plano</h2><p><strong>Respiração</strong> e <span style="color: rgb(220, 38, 38)">exposição</span></p>',
+  });
+  await renderizarPagina();
+
+  const notas = screen.getByLabelText("Notas");
+  expect(
+    within(notas).getByRole("heading", { level: 2, name: "Plano" }),
+  ).toBeInTheDocument();
+  expect(within(notas).getByText("Respiração").tagName).toBe("STRONG");
+  expect(within(notas).getByText("exposição")).toHaveStyle({
+    color: "rgb(220, 38, 38)",
+  });
+});
+
+test("notas de texto plano (anteriores ao editor) viram parágrafos fiéis", async () => {
+  // Consultas gravadas antes do editor guardavam as Notas como texto plano de
+  // um textarea: quebras de linha e sinais como < e & entravam literais.
+  carregarConsulta({ notas: "Relatou <muita> ansiedade & medo\nSegue tensa" });
+  await renderizarPagina();
+
+  const notas = screen.getByLabelText("Notas");
+  expect(
+    within(notas).getByText("Relatou <muita> ansiedade & medo"),
+  ).toBeInTheDocument();
+  expect(within(notas).getByText("Segue tensa")).toBeInTheDocument();
+});
+
+test("sair da página com Notas pendentes também grava na hora", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  const tela = await renderizarPagina();
+
+  await terapeuta.type(screen.getByLabelText("Notas"), "Hipóteses");
+  expect(atualizacoesDe("notas")).toHaveLength(0); // pausa ainda correndo
+
+  tela.unmount();
+  await act(async () => {});
+
+  expect(atualizacoesDe("notas")).toHaveLength(1);
+  expect(atualizacoesDe("notas")[0].valores[0]).toBe("<p>Hipóteses</p>");
 });
 
 test("consulta inexistente explica a ausência", async () => {
@@ -148,7 +196,7 @@ test("a pausa na digitação salva o Conteúdo sozinho, sem botão Salvar", asyn
   ).not.toBeInTheDocument();
 });
 
-test("a pausa na digitação também salva as Notas, de forma independente", async () => {
+test("a pausa na digitação também salva as Notas como HTML, de forma independente", async () => {
   const terapeuta = terapeutaComTimersFalsos();
   carregarConsulta();
   await renderizarPagina();
@@ -158,11 +206,107 @@ test("a pausa na digitação também salva as Notas, de forma independente", asy
 
   expect(atualizacoesDe("notas")).toHaveLength(1);
   expect(atualizacoesDe("notas")[0].valores).toEqual([
-    "Hipóteses",
+    "<p>Hipóteses</p>",
     3,
     "Cancelada",
   ]);
   expect(atualizacoesDe("conteudo")).toHaveLength(0);
+});
+
+test("Negrito, Itálico, Sublinhado e Riscado marcam o que se digita e acendem no toolbar", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  const notas = screen.getByLabelText("Notas");
+  const botao = (nome: string) => screen.getByRole("button", { name: nome });
+
+  // A terapeuta põe o cursor no texto e liga as marcas pelo toolbar; os
+  // botões seguram o foco no editor (mousedown cancelado), então o que ela
+  // digita em seguida sai marcado.
+  await terapeuta.click(notas);
+  expect(botao("Negrito")).toHaveAttribute("aria-pressed", "false");
+  await terapeuta.click(botao("Negrito"));
+  await terapeuta.click(botao("Itálico"));
+  await terapeuta.click(botao("Sublinhado"));
+  await terapeuta.click(botao("Riscado"));
+  expect(botao("Negrito")).toHaveAttribute("aria-pressed", "true");
+  expect(botao("Riscado")).toHaveAttribute("aria-pressed", "true");
+
+  await terapeuta.type(notas, "tudo", { skipClick: true });
+  await passar(600);
+
+  expect(atualizacoesDe("notas")).toHaveLength(1);
+  expect(atualizacoesDe("notas")[0].valores[0]).toBe(
+    "<p><strong><em><s><u>tudo</u></s></em></strong></p>",
+  );
+});
+
+test("o seletor de título transforma o bloco em h1–h6 e volta a texto normal", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta({ notas: "<p>Plano de exposição</p>" });
+  await renderizarPagina();
+  const titulo = () => screen.getByLabelText("Título");
+
+  await terapeuta.selectOptions(titulo(), "Título 2");
+  await passar(600);
+
+  // O <p></p> final é o parágrafo vazio que o editor mantém após um título,
+  // para haver onde clicar e seguir escrevendo.
+  expect(atualizacoesDe("notas")[0].valores[0]).toBe(
+    "<h2>Plano de exposição</h2><p></p>",
+  );
+  expect(titulo()).toHaveValue("2");
+
+  await terapeuta.selectOptions(titulo(), "Texto normal");
+  await passar(600);
+
+  expect(atualizacoesDe("notas")[1].valores[0]).toBe(
+    "<p>Plano de exposição</p><p></p>",
+  );
+  expect(titulo()).toHaveValue("0");
+});
+
+test("o seletor de tamanho da fonte aplica o tamanho ao que se digita", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  const notas = screen.getByLabelText("Notas");
+
+  await terapeuta.selectOptions(
+    screen.getByLabelText("Tamanho da fonte"),
+    "18",
+  );
+  await terapeuta.click(notas); // volta o cursor ao texto
+  await terapeuta.type(notas, "foco", { skipClick: true });
+  await passar(600);
+
+  expect(atualizacoesDe("notas")[0].valores[0]).toBe(
+    '<p><span style="font-size: 18px;">foco</span></p>',
+  );
+});
+
+test("as cores básicas colorem o que se digita; a cor padrão volta ao normal", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  const notas = screen.getByLabelText("Notas");
+
+  await terapeuta.click(notas);
+  await terapeuta.click(screen.getByRole("button", { name: "Cor vermelha" }));
+  await terapeuta.type(notas, "alerta", { skipClick: true });
+  await passar(600);
+
+  expect(atualizacoesDe("notas")[0].valores[0]).toBe(
+    '<p><span style="color: rgb(220, 38, 38);">alerta</span></p>',
+  );
+
+  await terapeuta.click(screen.getByRole("button", { name: "Cor padrão" }));
+  await terapeuta.type(notas, " ok", { skipClick: true });
+  await passar(600);
+
+  expect(atualizacoesDe("notas")[1].valores[0]).toBe(
+    '<p><span style="color: rgb(220, 38, 38);">alerta</span> ok</p>',
+  );
 });
 
 test("digitação contínua não adia o salvamento além da espera máxima", async () => {
@@ -239,7 +383,12 @@ test("Finalizar Consulta grava o novo status e a página passa a Finalizada", as
   ).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Timer da consulta")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Conteúdo")).toBeEnabled();
-  expect(screen.getByLabelText("Notas")).toBeEnabled();
+  // toBeEnabled passaria em qualquer div; a editabilidade do editor está no
+  // atributo contenteditable.
+  expect(screen.getByLabelText("Notas")).toHaveAttribute(
+    "contenteditable",
+    "true",
+  );
 });
 
 test("consulta Cancelada é somente leitura, sem timer e sem ações", async () => {
@@ -248,7 +397,12 @@ test("consulta Cancelada é somente leitura, sem timer e sem ações", async () 
 
   expect(screen.getByText("Cancelada")).toBeInTheDocument();
   expect(screen.getByLabelText("Conteúdo")).toBeDisabled();
-  expect(screen.getByLabelText("Notas")).toBeDisabled();
+  expect(screen.getByLabelText("Notas")).toHaveAttribute(
+    "contenteditable",
+    "false",
+  );
+  expect(screen.getByRole("button", { name: "Negrito" })).toBeDisabled();
+  expect(screen.getByLabelText("Título")).toBeDisabled();
   expect(
     screen.queryByRole("button", { name: "Finalizar Consulta" }),
   ).not.toBeInTheDocument();
