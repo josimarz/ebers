@@ -1,9 +1,9 @@
-import { ArrowDown, ArrowUp, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { ArrowDown, ArrowUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import { FiltroPaciente } from "@/components/filtro-paciente";
 import { FotoPaciente } from "@/components/foto-paciente";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/table";
 import { type Consulta, listarConsultas } from "@/db/consultas";
 import { listarPacientes, type Paciente } from "@/db/pacientes";
-import { colacaoPtBr, filtrarPorNome } from "@/dominio/busca";
 import { formatarData, formatarHora } from "@/dominio/data-hora";
 import {
   montarPaginaDeConsultas,
@@ -26,13 +25,23 @@ type Carga =
   | { estado: "pronto"; consultas: Consulta[]; pacientes: Paciente[] }
   | { estado: "erro" };
 
+/** Id vindo de ?paciente= — o atalho "Listar consultas" do Controle
+ * financeiro (spec 3.1) abre a listagem já filtrada. Inválido = sem filtro. */
+function pacienteDaUrl(parametro: string | null): number | null {
+  const id = Number(parametro);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export function PaginaConsultas() {
   const [carga, setCarga] = useState<Carga>({ estado: "carregando" });
-  const [parametros, setParametros] = useState<ParametrosListagemConsultas>({
-    pacienteId: null,
-    direcao: "desc",
-    pagina: 1,
-  });
+  const [buscaUrl] = useSearchParams();
+  const [parametros, setParametros] = useState<ParametrosListagemConsultas>(
+    () => ({
+      pacienteId: pacienteDaUrl(buscaUrl.get("paciente")),
+      direcao: "desc",
+      pagina: 1,
+    }),
+  );
   const navegar = useNavigate();
 
   useEffect(() => {
@@ -228,102 +237,6 @@ function TabelaDeConsultas({
             </div>
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-interface PropsFiltroPaciente {
-  pacientes: Paciente[];
-  /** Id do paciente do filtro ativo; null = todas as consultas. */
-  selecionado: number | null;
-  aoSelecionar: (pacienteId: number | null) => void;
-}
-
-/**
- * Filtro por paciente da listagem (spec 2.4): dropdown com autocomplete. A
- * digitação só estreita as sugestões — o filtro da tabela muda ao selecionar
- * uma opção ou limpar.
- */
-function FiltroPaciente({
-  pacientes,
-  selecionado,
-  aoSelecionar,
-}: PropsFiltroPaciente) {
-  const [texto, setTexto] = useState("");
-  const [aberto, setAberto] = useState(false);
-  const raiz = useRef<HTMLDivElement>(null);
-
-  /** Fecha as sugestões quando o foco deixa o filtro por inteiro. */
-  function fecharSeSaiu(evento: React.FocusEvent) {
-    if (!raiz.current?.contains(evento.relatedTarget)) setAberto(false);
-  }
-
-  const sugeridos = filtrarPorNome(pacientes, texto).sort((a, b) =>
-    colacaoPtBr.compare(a.nomeCompleto, b.nomeCompleto),
-  );
-
-  function selecionar(paciente: Paciente) {
-    aoSelecionar(paciente.id);
-    setTexto(paciente.nomeCompleto);
-    setAberto(false);
-  }
-
-  function limpar() {
-    aoSelecionar(null);
-    setTexto("");
-    setAberto(false);
-  }
-
-  return (
-    <div ref={raiz} className="relative flex max-w-xs gap-2">
-      <Input
-        role="combobox"
-        aria-expanded={aberto}
-        aria-controls="opcoes-filtro-paciente"
-        aria-autocomplete="list"
-        aria-label="Filtrar por paciente"
-        placeholder="Filtrar por paciente"
-        value={texto}
-        onFocus={() => setAberto(true)}
-        onBlur={fecharSeSaiu}
-        onChange={(evento) => {
-          setTexto(evento.target.value);
-          setAberto(true);
-        }}
-      />
-      {selecionado !== null && (
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Limpar filtro"
-          onClick={limpar}
-          onBlur={fecharSeSaiu}
-        >
-          <X aria-hidden="true" />
-        </Button>
-      )}
-      {aberto && sugeridos.length > 0 && (
-        <div
-          id="opcoes-filtro-paciente"
-          role="listbox"
-          aria-label="Pacientes"
-          className="glass-bg absolute top-full right-0 left-0 z-10 mt-1 max-h-64 overflow-y-auto rounded-lg border border-input py-1 shadow-md"
-        >
-          {sugeridos.map((paciente) => (
-            <button
-              key={paciente.id}
-              type="button"
-              role="option"
-              aria-selected={paciente.id === selecionado}
-              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent"
-              onClick={() => selecionar(paciente)}
-              onBlur={fecharSeSaiu}
-            >
-              {paciente.nomeCompleto}
-            </button>
-          ))}
-        </div>
       )}
     </div>
   );

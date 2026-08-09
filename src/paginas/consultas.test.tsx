@@ -259,6 +259,27 @@ test("selecionar um paciente filtra a listagem; limpar volta a listar todas", as
   expect(datasExibidas()).toEqual(["08/08/2026", "07/08/2026"]);
 });
 
+test("aberta com ?paciente= na URL, a listagem nasce filtrada nesse paciente", async () => {
+  programarCarga(
+    [
+      consultaNaListagem({ pacienteId: 1, iniciadoEm: iso(8, 14) }),
+      consultaNaListagem({ pacienteId: 2, iniciadoEm: iso(7, 10) }),
+    ],
+    [pacienteAna(), pacienteBruno()],
+  );
+  render(
+    <MemoryRouter initialEntries={["/consultas?paciente=2"]}>
+      <PaginaConsultas />
+    </MemoryRouter>,
+  );
+
+  await screen.findByText("07/08/2026");
+  expect(datasExibidas()).toEqual(["07/08/2026"]);
+  expect(
+    screen.getByRole("combobox", { name: "Filtrar por paciente" }),
+  ).toHaveValue("Bruno Castro");
+});
+
 test("paciente selecionado sem consultas explica o resultado vazio", async () => {
   const terapeuta = userEvent.setup();
   programarCarga(
