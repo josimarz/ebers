@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { FotoPaciente } from "@/components/foto-paciente";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { consultasAbertas, criarConsulta } from "@/db/consultas";
 import { saldosDeCreditos } from "@/db/creditos";
 import { listarPacientes, type Paciente } from "@/db/pacientes";
 import { calcularIdade, hojeIso } from "@/dominio/idade";
@@ -24,22 +25,29 @@ import {
 
 type Carga =
   | { estado: "carregando" }
-  | { estado: "pronto"; pacientes: Paciente[]; saldos: Map<number, number> }
+  | {
+      estado: "pronto";
+      pacientes: Paciente[];
+      saldos: Map<number, number>;
+      abertas: Map<number, number>;
+    }
   | { estado: "erro" };
 
 export function PaginaPacientes() {
   const [carga, setCarga] = useState<Carga>({ estado: "carregando" });
+  const [erroAoCriarConsulta, setErroAoCriarConsulta] = useState(false);
   const [parametros, setParametros] = useState<ParametrosListagem>({
     busca: "",
     ordenacao: { coluna: "nome", direcao: "asc" },
     pagina: 1,
   });
+  const navegar = useNavigate();
 
   useEffect(() => {
     let ativo = true;
-    Promise.all([listarPacientes(), saldosDeCreditos()])
-      .then(([pacientes, saldos]) => {
-        if (ativo) setCarga({ estado: "pronto", pacientes, saldos });
+    Promise.all([listarPacientes(), saldosDeCreditos(), consultasAbertas()])
+      .then(([pacientes, saldos, abertas]) => {
+        if (ativo) setCarga({ estado: "pronto", pacientes, saldos, abertas });
       })
       .catch(() => {
         if (ativo) setCarga({ estado: "erro" });
@@ -48,6 +56,15 @@ export function PaginaPacientes() {
       ativo = false;
     };
   }, []);
+
+  async function novaConsulta(pacienteId: number) {
+    try {
+      const id = await criarConsulta(pacienteId);
+      navegar(`/consultas/${id}`);
+    } catch {
+      setErroAoCriarConsulta(true);
+    }
+  }
 
   // Ordenar e buscar recomeçam da primeira página; só navegar a preserva.
   function ordenarPor(coluna: OrdenacaoPacientes["coluna"]) {
@@ -85,6 +102,10 @@ export function PaginaPacientes() {
         </p>
       )}
 
+      {erroAoCriarConsulta && (
+        <p className="text-destructive">Não foi possível criar a consulta.</p>
+      )}
+
       {carga.estado === "pronto" &&
         (carga.pacientes.length === 0 ? (
           <div className="glass-bg flex flex-col items-center gap-1 rounded-xl px-6 py-12 text-center">
@@ -97,10 +118,12 @@ export function PaginaPacientes() {
           <TabelaDePacientes
             pacientes={carga.pacientes}
             saldos={carga.saldos}
+            abertas={carga.abertas}
             parametros={parametros}
             aoBuscar={buscarPor}
             aoOrdenar={ordenarPor}
             aoMudarPagina={irParaPagina}
+            aoNovaConsulta={novaConsulta}
           />
         ))}
     </section>
@@ -110,19 +133,24 @@ export function PaginaPacientes() {
 interface PropsTabelaDePacientes {
   pacientes: Paciente[];
   saldos: Map<number, number>;
+  /** Consulta Aberta por paciente: decide entre "Nova Consulta" e "Consulta". */
+  abertas: Map<number, number>;
   parametros: ParametrosListagem;
   aoBuscar: (busca: string) => void;
   aoOrdenar: (coluna: OrdenacaoPacientes["coluna"]) => void;
   aoMudarPagina: (pagina: number) => void;
+  aoNovaConsulta: (pacienteId: number) => void;
 }
 
 function TabelaDePacientes({
   pacientes,
   saldos,
+  abertas,
   parametros,
   aoBuscar,
   aoOrdenar,
   aoMudarPagina,
+  aoNovaConsulta,
 }: PropsTabelaDePacientes) {
   const { itens, pagina, totalPaginas } = montarPaginaDePacientes(
     pacientes,
@@ -199,11 +227,17 @@ function TabelaDePacientes({
                     <TableCell>{paciente.diaSemanaConsulta ?? "—"}</TableCell>
                     <TableCell>{saldos.get(paciente.id) ?? 0}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`/pacientes/${paciente.id}/editar`}>
-                          Editar
-                        </Link>
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/pacientes/${paciente.id}/editar`}>
+                            Editar
+                          </Link>
+                        </Button>
+                        <BotaoDeConsulta
+                          consultaAberta={abertas.get(paciente.id)}
+                          aoNovaConsulta={() => aoNovaConsulta(paciente.id)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -237,6 +271,34 @@ function TabelaDePacientes({
         </>
       )}
     </div>
+  );
+}
+
+interface PropsBotaoDeConsulta {
+  /** Id da Consulta Aberta do paciente; undefined = nenhuma. */
+  consultaAberta: number | undefined;
+  aoNovaConsulta: () => void;
+}
+
+/**
+ * Regra da coluna Ações (spec 1.2): sem Consulta Aberta, "Nova Consulta" cria
+ * e abre a consulta; com Aberta, "Consulta" leva direto a ela.
+ */
+function BotaoDeConsulta({
+  consultaAberta,
+  aoNovaConsulta,
+}: PropsBotaoDeConsulta) {
+  if (consultaAberta !== undefined) {
+    return (
+      <Button size="sm" asChild>
+        <Link to={`/consultas/${consultaAberta}`}>Consulta</Link>
+      </Button>
+    );
+  }
+  return (
+    <Button size="sm" onClick={aoNovaConsulta}>
+      Nova Consulta
+    </Button>
   );
 }
 

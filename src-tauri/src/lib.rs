@@ -36,6 +36,12 @@ pub fn migracoes() -> Vec<Migration> {
             sql: include_str!("../migrations/0002_foto-perfil-paciente.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "nova_consulta_e_movimentos_de_credito",
+            sql: include_str!("../migrations/0003_nova-consulta-e-movimentos-de-credito.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -214,6 +220,90 @@ mod testes {
             .expect("consultar a foto do paciente");
 
         assert_eq!(foto.as_deref(), Some("foto-1.jpg"));
+    }
+
+    /// Insere uma Consulta Aberta só com os campos sem valor padrão (spec 2.1).
+    fn inserir_consulta_aberta(
+        conexao: &rusqlite::Connection,
+        paciente_id: i64,
+    ) -> Result<usize, rusqlite::Error> {
+        conexao.execute(
+            "INSERT INTO consultas (paciente_id, iniciado_em, preco_centavos)
+             VALUES (?1, '2026-08-08T14:00:00.000Z', 25000)",
+            rusqlite::params![paciente_id],
+        )
+    }
+
+    #[test]
+    fn consulta_nasce_aberta_nao_paga_e_com_textos_vazios() {
+        let conexao = banco_migrado();
+        inserir_paciente(&conexao, "Ana Lima", "52998224725")
+            .expect("inserir paciente");
+
+        inserir_consulta_aberta(&conexao, 1).expect("inserir consulta");
+
+        let (status, pago, conteudo, notas): (String, i64, String, String) = conexao
+            .query_row(
+                "SELECT status, pago, conteudo, notas FROM consultas WHERE id = 1",
+                [],
+                |linha| {
+                    Ok((linha.get(0)?, linha.get(1)?, linha.get(2)?, linha.get(3)?))
+                },
+            )
+            .expect("consultar a consulta inserida");
+
+        assert_eq!(status, "Aberta");
+        assert_eq!(pago, 0);
+        assert_eq!(conteudo, "");
+        assert_eq!(notas, "");
+    }
+
+    #[test]
+    fn cada_paciente_tem_no_maximo_uma_consulta_aberta() {
+        let conexao = banco_migrado();
+        inserir_paciente(&conexao, "Ana Lima", "52998224725")
+            .expect("inserir paciente");
+        inserir_consulta_aberta(&conexao, 1).expect("primeira Consulta Aberta");
+
+        let segunda = inserir_consulta_aberta(&conexao, 1);
+        assert!(
+            segunda.is_err(),
+            "segunda Aberta do mesmo paciente deveria violar o índice único"
+        );
+
+        // Finalizada a primeira, uma nova Aberta volta a ser permitida.
+        conexao
+            .execute("UPDATE consultas SET status = 'Finalizada' WHERE id = 1", [])
+            .expect("finalizar a primeira consulta");
+        inserir_consulta_aberta(&conexao, 1)
+            .expect("nova Aberta depois de finalizar a anterior");
+    }
+
+    #[test]
+    fn movimento_consumo_referencia_a_consulta_e_entra_na_soma_do_saldo() {
+        let conexao = banco_migrado();
+        inserir_paciente(&conexao, "Ana Lima", "52998224725")
+            .expect("inserir paciente");
+        inserir_consulta_aberta(&conexao, 1).expect("inserir consulta");
+
+        conexao
+            .execute(
+                "INSERT INTO movimentos_credito
+                     (paciente_id, tipo, quantidade, ocorrido_em, consulta_id)
+                 VALUES (1, 'Consumo', -1, '2026-08-08T14:00:00.000Z', 1)",
+                [],
+            )
+            .expect("registrar o Movimento Consumo");
+
+        let saldo: i64 = conexao
+            .query_row(
+                "SELECT SUM(quantidade) FROM movimentos_credito WHERE paciente_id = 1",
+                [],
+                |linha| linha.get(0),
+            )
+            .expect("somar os movimentos do paciente");
+
+        assert_eq!(saldo, -1);
     }
 
     #[test]

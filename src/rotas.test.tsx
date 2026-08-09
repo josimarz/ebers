@@ -37,6 +37,17 @@ test("sem window.__TAURI__, qualquer caminho cai no Auto-cadastro, sem menu", ()
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
 
+test("no app desktop, /consultas/:id cai na página da consulta", async () => {
+  simularModoDesktop();
+  renderizarRotas("/consultas/3");
+
+  // Sem consulta 3 no banco falso, a própria página explica a ausência —
+  // prova de que a rota resolve para a página da consulta.
+  expect(
+    await screen.findByText("Consulta não encontrada."),
+  ).toBeInTheDocument();
+});
+
 test("no app desktop (window.__TAURI__), as seções e o menu continuam lá", async () => {
   simularModoDesktop();
   renderizarRotas("/pacientes");

@@ -1,6 +1,17 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-// Import relativo: o drizzle-kit compila este arquivo fora do Vite e não
+import { sql } from "drizzle-orm";
+import {
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+// Imports relativos: o drizzle-kit compila este arquivo fora do Vite e não
 // resolve o alias "@".
+import {
+  ORIGENS_PAGAMENTO,
+  STATUS_CONSULTA,
+  TIPOS_MOVIMENTO_CREDITO,
+} from "../dominio/consulta";
 import {
   DIAS_SEMANA_CONSULTA,
   GENEROS,
@@ -42,4 +53,50 @@ export const pacientes = sqliteTable("pacientes", {
   diaSemanaConsulta: text("dia_semana_consulta", {
     enum: DIAS_SEMANA_CONSULTA,
   }),
+});
+
+// Consulta (spec 2.1). Datas/horas em ISO completo; Preço congelado na criação
+// a partir do Valor da consulta do Paciente. O índice único parcial garante no
+// banco a pré-condição da spec 2.2: no máximo uma Aberta por Paciente.
+export const consultas = sqliteTable(
+  "consultas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    pacienteId: integer("paciente_id")
+      .notNull()
+      .references(() => pacientes.id),
+    iniciadoEm: text("iniciado_em").notNull(),
+    finalizadoEm: text("finalizado_em"),
+    pagoEm: text("pago_em"),
+    status: text("status", { enum: STATUS_CONSULTA })
+      .notNull()
+      .default("Aberta"),
+    conteudo: text("conteudo").notNull().default(""),
+    notas: text("notas").notNull().default(""),
+    precoCentavos: integer("preco_centavos").notNull(),
+    pago: integer("pago", { mode: "boolean" }).notNull().default(false),
+    origemPagamento: text("origem_pagamento", { enum: ORIGENS_PAGAMENTO }),
+  },
+  (tabela) => [
+    uniqueIndex("consultas_paciente_aberta_unica")
+      .on(tabela.pacienteId)
+      .where(sql`${tabela.status} = 'Aberta'`),
+  ],
+);
+
+// Movimento de crédito (spec 3.3): o saldo de Créditos é a soma das
+// quantidades, nunca um campo editado. Consumo/Estorno referenciam a Consulta;
+// Venda guarda o valor unitário vigente (informativo); Ajuste exige motivo —
+// obrigatoriedades por tipo ficam na camada de domínio, não no banco.
+export const movimentosCredito = sqliteTable("movimentos_credito", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  pacienteId: integer("paciente_id")
+    .notNull()
+    .references(() => pacientes.id),
+  tipo: text("tipo", { enum: TIPOS_MOVIMENTO_CREDITO }).notNull(),
+  quantidade: integer("quantidade").notNull(),
+  ocorridoEm: text("ocorrido_em").notNull(),
+  consultaId: integer("consulta_id").references(() => consultas.id),
+  valorUnitarioCentavos: integer("valor_unitario_centavos"),
+  motivo: text("motivo"),
 });

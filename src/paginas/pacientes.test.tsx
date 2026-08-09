@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes, useParams } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { DadosPaciente } from "@/dominio/paciente";
 import {
@@ -8,11 +8,13 @@ import {
   programarComando,
   reiniciarComandosFalsos,
 } from "@/testes/comandos-falsos";
+import { consultaAberta, linhaDeConsulta } from "@/testes/fixtures-consulta";
 import {
   dadosPacienteValidos,
   linhaDePaciente,
 } from "@/testes/fixtures-paciente";
 import {
+  chamadas,
   enfileirarSelect,
   reiniciarBancoFalso,
 } from "@/testes/plugin-sql-falso";
@@ -109,7 +111,8 @@ test("cada paciente vira uma linha com idade calculada, telefone, periodicidade,
     .getAllByRole("cell")
     .map((celula) => celula.textContent);
   // Nascida em 1990-03-10, aos 2026-08-08 tem 36 anos; sem Movimentos de
-  // crédito no sistema, o saldo é 0.
+  // crédito no sistema, o saldo é 0; sem Consulta Aberta, a ação é Nova
+  // Consulta.
   expect(celulas).toEqual([
     "",
     "Ana Lima",
@@ -118,8 +121,58 @@ test("cada paciente vira uma linha com idade calculada, telefone, periodicidade,
     "Semanal",
     "Quarta",
     "0",
-    "Editar",
+    "EditarNova Consulta",
   ]);
+});
+
+function PaginaConsultaStub() {
+  const { id } = useParams();
+  return <p>Consulta {id} em tela</p>;
+}
+
+test("sem Consulta Aberta, Nova Consulta cria a consulta e abre a sua página", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect([pacienteNaListagem()]);
+  render(
+    <MemoryRouter initialEntries={["/pacientes"]}>
+      <Routes>
+        <Route path="/pacientes" element={<PaginaPacientes />} />
+        <Route path="/consultas/:id" element={<PaginaConsultaStub />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByText("Ana Lima");
+
+  // Criação: nenhuma Aberta, o paciente, o saldo e a consulta recém-criada.
+  enfileirarSelect([]);
+  enfileirarSelect([pacienteNaListagem({ nomeCompleto: "Ana Lima" })]);
+  enfileirarSelect([{ saldo: 0 }]);
+  enfileirarSelect([linhaDeConsulta(consultaAberta({ id: 3, pacienteId: 1 }))]);
+
+  await terapeuta.click(screen.getByRole("button", { name: "Nova Consulta" }));
+
+  expect(await screen.findByText("Consulta 3 em tela")).toBeInTheDocument();
+  const insercoes = chamadas.filter((chamada) =>
+    /insert into "consultas"/i.test(chamada.sql),
+  );
+  expect(insercoes).toHaveLength(1);
+});
+
+test("com Consulta Aberta, a ação vira o botão Consulta apontando para ela", async () => {
+  enfileirarSelect([pacienteNaListagem()]); // listagem (paciente 1)
+  enfileirarSelect([]); // saldos de créditos
+  enfileirarSelect([{ paciente_id: 1, id: 5 }]); // consultas Abertas
+  renderizarPagina();
+
+  const linha = (await screen.findByText("Ana Lima")).closest("tr");
+  expect(
+    within(linha as HTMLElement).getByRole("link", { name: "Consulta" }),
+  ).toHaveAttribute("href", "/consultas/5");
+  expect(
+    within(linha as HTMLElement).queryByRole("button", {
+      name: "Nova Consulta",
+    }),
+  ).not.toBeInTheDocument();
 });
 
 test("periodicidade e dia da semana vazios aparecem como travessão", async () => {

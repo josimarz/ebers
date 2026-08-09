@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { LayoutApp } from "@/layout/layout-app";
 import { modoTablet } from "@/lib/modo";
 import { PaginaAutoCadastro } from "@/paginas/auto-cadastro";
+import { PaginaConsulta } from "@/paginas/consulta";
 import { PaginaConsultas } from "@/paginas/consultas";
 import { PaginaFinanceiro } from "@/paginas/financeiro";
 import { PaginaFormularioPaciente } from "@/paginas/paciente-formulario";
@@ -65,6 +66,7 @@ export function Rotas() {
           path="/pacientes/:id/editar"
           element={<PaginaFormularioPaciente />}
         />
+        <Route path="/consultas/:id" element={<PaginaConsulta />} />
       </Route>
     </Routes>
   );

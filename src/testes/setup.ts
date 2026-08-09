@@ -1,4 +1,13 @@
 import "@testing-library/jest-dom/vitest";
+import { vi } from "vitest";
+
+// A Testing Library só avança timers falsos se enxergar o global `jest`
+// (jestFakeTimersAreEnabled); no vitest ele não existe e o dreno interno de
+// user-event/waitFor fica preso num setTimeout mockado que nunca dispara.
+// O shim entrega o único método que ela chama.
+(globalThis as { jest?: unknown }).jest = {
+  advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms),
+};
 
 // Shims de APIs de navegador ausentes no jsdom, exigidas pelos componentes
 // (sidebar usa matchMedia; componentes Radix usam ResizeObserver).
