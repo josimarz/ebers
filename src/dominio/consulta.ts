@@ -52,6 +52,8 @@ export function pagamentoNaCriacao(
 
 export interface AcoesDaConsulta {
   camposEditaveis: boolean;
+  /** Transcrição de voz no Conteúdo — só na Consulta Aberta. */
+  microfone: boolean;
   finalizar: boolean;
   efetuarPagamento: boolean;
   desfazerPagamento: boolean;
@@ -75,6 +77,7 @@ export function acoesDaConsulta(consulta: {
   const abertaOuFinalizada = status === "Aberta" || status === "Finalizada";
   return {
     camposEditaveis: status !== "Cancelada",
+    microfone: status === "Aberta",
     finalizar: status === "Aberta",
     efetuarPagamento: abertaOuFinalizada && !pago,
     desfazerPagamento:

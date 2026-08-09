@@ -16,6 +16,33 @@ Pela rede só existe o formulário de Auto-cadastro; as demais telas ficam
 restritas ao app no computador
 ([ADR-0003](./adr/0003-rede-local-sem-autenticacao.md)).
 
+## Transcrição de voz (microfone)
+
+O botão "Ligar microfone" da página da consulta transcreve a fala direto no
+campo Conteúdo — todo o processamento acontece no próprio computador, nenhum
+áudio sai da máquina
+([ADR-0004](./adr/0004-transcricao-offline-com-whisper.md)). Antes do
+primeiro uso, é preciso baixar o modelo de voz, uma única vez:
+
+1. Baixe **um** dos modelos abaixo (quanto maior, melhor a transcrição —
+   escolha o que o computador comportar):
+
+   | Modelo | Arquivo | Tamanho | Indicado para |
+   | --- | --- | --- | --- |
+   | small | [`ggml-small.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin) | ~466 MB | computadores recentes (ex.: Mac com Apple Silicon) |
+   | base | [`ggml-base.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin) | ~142 MB | o equilíbrio para a maioria das máquinas |
+   | tiny | [`ggml-tiny.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin) | ~75 MB | computadores mais antigos |
+
+2. Crie a subpasta `modelos` dentro da pasta de dados do Ebers (tabela em
+   "Onde ficam os dados", abaixo) e mova o arquivo baixado para lá, **sem
+   renomear**.
+3. Pronto: na próxima consulta, ligue o microfone e fale normalmente. Se
+   houver mais de um modelo na pasta, o Ebers usa o de melhor qualidade.
+
+> Na primeira vez, o sistema pergunta se o Ebers pode usar o microfone —
+> permita. Se o botão avisar "Modelo de transcrição não instalado", confira o
+> nome e o lugar do arquivo.
+
 ## Backup manual
 
 Todos os dados do Ebers vivem em **uma única pasta** do
@@ -33,7 +60,9 @@ computador — o banco de dados (`ebers.db`) e as fotos de perfil (subpasta
 Dentro dela:
 
 - `ebers.db` — o banco com todos os cadastros, consultas e anotações;
-- `fotos/` — as fotos de perfil dos pacientes.
+- `fotos/` — as fotos de perfil dos pacientes;
+- `modelos/` — o modelo de voz da transcrição. Pode ficar fora do backup:
+  se perder, é só baixar de novo (seção acima).
 
 ### Como fazer o backup
 

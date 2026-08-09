@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
+import { BotaoMicrofone } from "@/components/botao-microfone";
 import { EditorNotas } from "@/components/editor-notas";
 import { FotoPaciente } from "@/components/foto-paciente";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import {
   timerDaConsulta,
 } from "@/dominio/consulta";
 import { calcularIdade, hojeIso } from "@/dominio/idade";
+import { anexarTranscricao } from "@/dominio/transcricao";
 import { useSalvamentoAutomatico } from "@/hooks/use-salvamento-automatico";
 import { cn } from "@/lib/utils";
 
@@ -184,6 +186,7 @@ export function PaginaConsulta() {
           descricao="Relato do paciente"
           valorInicial={consulta.conteudo}
           desabilitado={!acoes.camposEditaveis}
+          comMicrofone={acoes.microfone}
           aoSalvar={(texto) => salvarConteudo(consulta.id, texto)}
         />
         <EditorNotas
@@ -236,6 +239,8 @@ interface PropsCampoDaConsulta {
   descricao: string;
   valorInicial: string;
   desabilitado: boolean;
+  /** Transcrição de voz junto ao rótulo — o Conteúdo da Aberta (spec 2.3). */
+  comMicrofone?: boolean;
   aoSalvar: (texto: string) => Promise<void>;
 }
 
@@ -246,27 +251,43 @@ function CampoDaConsulta({
   descricao,
   valorInicial,
   desabilitado,
+  comMicrofone = false,
   aoSalvar,
 }: PropsCampoDaConsulta) {
   const [valor, setValor] = useState(valorInicial);
+  // Digitação e transcrição alteram o mesmo texto por um único caminho; o ref
+  // dá à transcrição (callback fora do render) o valor mais recente.
+  const valorRef = useRef(valorInicial);
   const registrar = useSalvamentoAutomatico(aoSalvar);
+
+  function alterar(novo: string) {
+    valorRef.current = novo;
+    setValor(novo);
+    registrar(novo);
+  }
 
   return (
     <div className="flex flex-col gap-2">
-      <div>
-        <label htmlFor={id} className="font-medium">
-          {rotulo}
-        </label>
-        <p className="text-sm text-muted-foreground">{descricao}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <label htmlFor={id} className="font-medium">
+            {rotulo}
+          </label>
+          <p className="text-sm text-muted-foreground">{descricao}</p>
+        </div>
+        {comMicrofone && (
+          <BotaoMicrofone
+            aoTranscrever={(texto) =>
+              alterar(anexarTranscricao(valorRef.current, texto))
+            }
+          />
+        )}
       </div>
       <textarea
         id={id}
         value={valor}
         disabled={desabilitado}
-        onChange={(evento) => {
-          setValor(evento.target.value);
-          registrar(evento.target.value);
-        }}
+        onChange={(evento) => alterar(evento.target.value)}
         className="glass-bg min-h-64 flex-1 resize-y rounded-xl p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
       />
     </div>

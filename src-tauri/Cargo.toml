@@ -32,6 +32,13 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
 # libsqlite3-sys usada pelo sqlx do tauri-plugin-sql (chave `links`: só pode
 # haver uma no grafo).
 rusqlite = { version = "0.32", features = ["bundled"] }
+# Transcrição de voz offline da Consulta (spec 5.3, ADR-0004).
+whisper-rs = "0.16"
+
+# No macOS o Whisper roda na GPU via Metal — dá folga para os modelos maiores
+# (base/small) sem travar a máquina durante a Consulta.
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.16", features = ["metal"] }
 
 [dev-dependencies]
 tempfile = "3"

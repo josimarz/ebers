@@ -71,6 +71,7 @@ test("Aberta não paga: editável, com Finalizar, Efetuar Pagamento e Cancelar",
     acoesDaConsulta({ status: "Aberta", pago: false, origemPagamento: null }),
   ).toEqual({
     camposEditaveis: true,
+    microfone: true,
     finalizar: true,
     efetuarPagamento: true,
     desfazerPagamento: false,
@@ -87,6 +88,7 @@ test("Aberta paga por Crédito ainda pode ser cancelada, mas não desfeita", () 
     }),
   ).toEqual({
     camposEditaveis: true,
+    microfone: true,
     finalizar: true,
     efetuarPagamento: false,
     desfazerPagamento: false,
@@ -103,6 +105,7 @@ test("Aberta paga Direto exige desfazer o pagamento antes de cancelar", () => {
     }),
   ).toEqual({
     camposEditaveis: true,
+    microfone: true,
     finalizar: true,
     efetuarPagamento: false,
     desfazerPagamento: true,
@@ -119,6 +122,7 @@ test("Finalizada não paga: só Efetuar Pagamento, sem finalizar de novo nem can
     }),
   ).toEqual({
     camposEditaveis: true,
+    microfone: false,
     finalizar: false,
     efetuarPagamento: true,
     desfazerPagamento: false,
@@ -135,6 +139,7 @@ test("Finalizada paga Direto: só Desfazer Pagamento", () => {
     }),
   ).toEqual({
     camposEditaveis: true,
+    microfone: false,
     finalizar: false,
     efetuarPagamento: false,
     desfazerPagamento: true,
@@ -151,6 +156,7 @@ test("Finalizada paga por Crédito: editável, sem nenhuma ação de pagamento",
     }),
   ).toEqual({
     camposEditaveis: true,
+    microfone: false,
     finalizar: false,
     efetuarPagamento: false,
     desfazerPagamento: false,
@@ -167,6 +173,7 @@ test("Cancelada é somente leitura, sem nenhuma ação", () => {
     }),
   ).toEqual({
     camposEditaveis: false,
+    microfone: false,
     finalizar: false,
     efetuarPagamento: false,
     desfazerPagamento: false,

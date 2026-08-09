@@ -6,6 +6,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 pub mod cpf;
 pub mod fotos;
 pub mod servidor;
+pub mod transcricao;
 
 /// Mesmo banco aberto pelo frontend (src/db/executor.ts).
 pub const URL_BANCO: &str = "sqlite:ebers.db";
@@ -58,6 +59,12 @@ pub(crate) fn diretorio_de_fotos(app: &tauri::AppHandle) -> Result<PathBuf, Stri
     Ok(diretorio_de_dados(app)?.join(fotos::DIRETORIO_FOTOS))
 }
 
+/// Diretório dos modelos Whisper: `modelos/` ao lado do `ebers.db`
+/// (docs/operacao.md explica à terapeuta como baixar o modelo para lá).
+pub(crate) fn diretorio_de_modelos(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(diretorio_de_dados(app)?.join(transcricao::DIRETORIO_MODELOS))
+}
+
 /// Caminho do `ebers.db` no disco — o mesmo arquivo que o tauri-plugin-sql
 /// abre para URL_BANCO; as rotas do Auto-cadastro (servidor.rs) gravam nele.
 pub(crate) fn caminho_do_banco(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -90,6 +97,37 @@ fn remover_foto_paciente(app: tauri::AppHandle, arquivo: String) -> Result<(), S
     fotos::remover(&diretorio_de_fotos(&app)?, &arquivo)
 }
 
+/// Nome do modelo Whisper disponível (ou nulo) — o frontend consulta antes de
+/// ligar o microfone, para avisar quando ainda não há modelo baixado.
+#[tauri::command]
+fn modelo_de_transcricao(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    Ok(transcricao::localizar_modelo(&diretorio_de_modelos(&app)?)
+        .and_then(|caminho| caminho.file_name().map(|nome| nome.to_string_lossy().into_owned())))
+}
+
+/// Recebe um trecho de áudio (f32 LE, 16 kHz mono) como corpo bruto do invoke
+/// e devolve o texto transcrito. `async` no atributo: a inferência leva
+/// segundos e não pode rodar na thread principal — e o corpo bruto
+/// (`Request<'_>`) exige a assinatura síncrona.
+#[tauri::command(async)]
+fn transcrever_audio(
+    app: tauri::AppHandle,
+    transcritor: tauri::State<'_, transcricao::Transcritor>,
+    requisicao: tauri::ipc::Request<'_>,
+) -> Result<String, String> {
+    let tauri::ipc::InvokeBody::Raw(dados) = requisicao.body() else {
+        return Err("Esperava as amostras de áudio no corpo da chamada".into());
+    };
+    let amostras = transcricao::amostras_do_corpo(dados)?;
+    if amostras.is_empty() {
+        return Ok(String::new());
+    }
+    let caminho = transcricao::localizar_modelo(&diretorio_de_modelos(&app)?)
+        .ok_or("Nenhum modelo de transcrição em modelos/ (docs/operacao.md)")?;
+    let contexto = transcritor.contexto(&caminho)?;
+    transcricao::transcrever(&contexto, &transcricao::com_duracao_minima(amostras))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -99,10 +137,13 @@ pub fn run() {
                 .add_migrations(URL_BANCO, migracoes())
                 .build(),
         )
+        .manage(transcricao::Transcritor::default())
         .invoke_handler(tauri::generate_handler![
             salvar_foto_paciente,
             carregar_foto_paciente,
-            remover_foto_paciente
+            remover_foto_paciente,
+            modelo_de_transcricao,
+            transcrever_audio
         ])
         .setup(|app| {
             // O servidor do Auto-cadastro sobe junto com o app (spec 5.1);

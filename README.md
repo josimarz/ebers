@@ -23,4 +23,4 @@ mise run test    # testes do frontend (Vitest) e do backend (cargo test)
 mise run lint    # Biome: lint + formatação
 ```
 
-O banco SQLite (`ebers.db`) é criado no diretório de dados do app na primeira execução, e as fotos de perfil ficam ao lado dele em `fotos/` (ver [`docs/operacao.md`](docs/operacao.md)); as migrações em [`src-tauri/migrations/`](src-tauri/migrations/) são geradas pelo `drizzle-kit` (`mise run db:generate`) e aplicadas pelo backend Rust na inicialização.
+O banco SQLite (`ebers.db`) é criado no diretório de dados do app na primeira execução; as fotos de perfil ficam ao lado dele em `fotos/` e o modelo Whisper da transcrição de voz em `modelos/` (ver [`docs/operacao.md`](docs/operacao.md)); as migrações em [`src-tauri/migrations/`](src-tauri/migrations/) são geradas pelo `drizzle-kit` (`mise run db:generate`) e aplicadas pelo backend Rust na inicialização.

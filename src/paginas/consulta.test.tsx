@@ -3,7 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Consulta } from "@/db/consultas";
-import { reiniciarComandosFalsos } from "@/testes/comandos-falsos";
+import {
+  capturaEstaAtiva,
+  emitirBloco,
+  programarFalhaDeCaptura,
+  reiniciarCapturaFalsa,
+} from "@/testes/captura-falsa";
+import {
+  chamadasDeComando,
+  programarComando,
+  programarErroDeComando,
+  reiniciarComandosFalsos,
+} from "@/testes/comandos-falsos";
 import { consultaAberta, linhaDeConsulta } from "@/testes/fixtures-consulta";
 import {
   dadosPacienteValidos,
@@ -16,17 +27,20 @@ import {
 } from "@/testes/plugin-sql-falso";
 import { PaginaConsulta } from "./consulta";
 
-// Fronteiras do sistema: o banco SQLite atrás do tauri-plugin-sql e o comando
-// Tauri que lê fotos. O caminho página → consultas/pacientes → drizzle roda
-// de verdade.
+// Fronteiras do sistema: o banco SQLite atrás do tauri-plugin-sql, os
+// comandos Tauri (fotos, transcrição) e a captura de áudio do navegador
+// (getUserMedia/AudioContext, que o jsdom não tem). O caminho página →
+// consultas/pacientes → drizzle roda de verdade.
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
 vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
+vi.mock("@/lib/captura-audio", () => import("@/testes/captura-falsa"));
 
 const AGORA_ISO = "2026-08-08T14:00:00.000Z";
 
 beforeEach(() => {
   reiniciarBancoFalso();
   reiniciarComandosFalsos();
+  reiniciarCapturaFalsa();
   // Timers falsos por inteiro: o timer da consulta e o salvamento automático
   // andam com vi.advanceTimersByTime; a carga da página é liberada com um
   // act assíncrono (só microtarefas), então findBy*/waitFor não são usados.
@@ -562,6 +576,188 @@ test("consulta Finalizada não paga oferece só Efetuar Pagamento", async () => 
   expect(
     screen.queryByRole("button", { name: "Desfazer Pagamento" }),
   ).not.toBeInTheDocument();
+});
+
+/** Emite `duracaoS` segundos de áudio no microfone falso, em blocos de 0,5 s. */
+async function captar(duracaoS: number, amplitude: number) {
+  await act(async () => {
+    for (let indice = 0; indice < duracaoS * 2; indice++) {
+      emitirBloco(0.5, amplitude);
+    }
+  });
+}
+
+/** Liga o microfone com o modelo já disponível no backend. */
+async function ligarMicrofone(terapeuta: ReturnType<typeof userEvent.setup>) {
+  programarComando("modelo_de_transcricao", "ggml-base.bin");
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  );
+  await act(async () => {});
+}
+
+test("o botão do microfone existe só na Consulta Aberta", async () => {
+  carregarConsulta();
+  const aberta = await renderizarPagina();
+  expect(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  ).toBeInTheDocument();
+  aberta.unmount();
+
+  carregarConsulta({ status: "Finalizada", finalizadoEm: AGORA_ISO });
+  const finalizada = await renderizarPagina();
+  expect(
+    screen.queryByRole("button", { name: "Ligar microfone" }),
+  ).not.toBeInTheDocument();
+  finalizada.unmount();
+
+  carregarConsulta({ status: "Cancelada" });
+  await renderizarPagina();
+  expect(
+    screen.queryByRole("button", { name: "Ligar microfone" }),
+  ).not.toBeInTheDocument();
+});
+
+test("com o microfone ligado, a fala transcrita entra no Conteúdo e é salva sozinha", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta({ conteudo: "Relato até aqui." });
+  await renderizarPagina();
+
+  await ligarMicrofone(terapeuta);
+  expect(capturaEstaAtiva()).toBe(true);
+  expect(
+    screen.getByRole("button", { name: "Desligar microfone" }),
+  ).toBeInTheDocument();
+
+  // 2 s de fala e 1 s de pausa fecham um trecho; o Whisper falso responde.
+  programarComando("transcrever_audio", " Sentiu ansiedade na semana. ");
+  await captar(2, 0.25);
+  await captar(1, 0);
+
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue(
+    "Relato até aqui. Sentiu ansiedade na semana.",
+  );
+  // O trecho cruzou a fronteira como bytes crus: 3 s × 16 kHz × 4 bytes.
+  const envios = chamadasDeComando.filter(
+    (chamada) => chamada.comando === "transcrever_audio",
+  );
+  expect(envios).toHaveLength(1);
+  expect((envios[0].argumentos as Uint8Array).byteLength).toBe(3 * 16000 * 4);
+
+  // O salvamento automático grava o Conteúdo com a transcrição anexada.
+  await passar(600);
+  expect(atualizacoesDe("conteudo")).toHaveLength(1);
+  expect(atualizacoesDe("conteudo")[0].valores[0]).toBe(
+    "Relato até aqui. Sentiu ansiedade na semana.",
+  );
+});
+
+test("desligar o microfone transcreve a fala que ainda não fechou trecho", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  // 1 s de fala: abaixo do mínimo, nada foi transcrito ainda.
+  await captar(1, 0.25);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("");
+
+  programarComando("transcrever_audio", "Última frase.");
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Desligar microfone" }),
+  );
+  await act(async () => {});
+
+  expect(capturaEstaAtiva()).toBe(false);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("Última frase.");
+  expect(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  ).toBeInTheDocument();
+});
+
+test("Finalizar Consulta com o microfone ligado ainda transcreve o que restou", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  // 1 s de fala que ainda não fechou trecho quando a Consulta é finalizada.
+  await captar(1, 0.25);
+  programarComando("transcrever_audio", "Frase final.");
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Finalizar Consulta" }),
+  );
+  await passar(0);
+
+  // Finalizada não tem microfone (spec 2.3): botão some e a captura para…
+  expect(
+    screen.queryByRole("button", { name: /microfone/ }),
+  ).not.toBeInTheDocument();
+  expect(capturaEstaAtiva()).toBe(false);
+  // …mas a fala pendente não se perde: entra no Conteúdo, que segue editável.
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("Frase final.");
+});
+
+test("sem modelo baixado, ligar o microfone explica o que falta", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+
+  programarComando("modelo_de_transcricao", null);
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  );
+  await act(async () => {});
+
+  expect(
+    screen.getByText(
+      "Modelo de transcrição não instalado — veja o guia de operação.",
+    ),
+  ).toBeInTheDocument();
+  expect(capturaEstaAtiva()).toBe(false);
+  expect(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  ).toBeInTheDocument();
+});
+
+test("sem acesso ao microfone, o aviso aparece no lugar da gravação", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+
+  programarComando("modelo_de_transcricao", "ggml-base.bin");
+  programarFalhaDeCaptura(new Error("Permissão negada"));
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  );
+  await act(async () => {});
+
+  expect(
+    screen.getByText("Não foi possível acessar o microfone."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  ).toBeInTheDocument();
+});
+
+test("falha na transcrição desliga o microfone e avisa", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  programarErroDeComando("transcrever_audio", "sem memória");
+  await captar(2, 0.25);
+  await captar(1, 0);
+
+  expect(capturaEstaAtiva()).toBe(false);
+  expect(
+    screen.getByText("A transcrição falhou — microfone desligado."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Ligar microfone" }),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("");
 });
 
 test("consulta Cancelada é somente leitura, sem timer e sem ações", async () => {

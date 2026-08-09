@@ -388,7 +388,7 @@ Decisão em [ADR-0004](./adr/0004-transcricao-offline-com-whisper.md).
 #### Padrão de comunicação
 
 ```
-[Frontend: captura áudio (Web Audio API)] → invoke("transcribe_audio", { audioData }) → [Backend Rust: whisper-rs] → texto transcrito
+[Frontend: captura áudio (Web Audio API)] → invoke("transcrever_audio", amostras f32 no corpo bruto) → [Backend Rust: whisper-rs] → texto transcrito
 ```
 
 ### 5.4 Linting e formatação: Biome
