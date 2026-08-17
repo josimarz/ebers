@@ -15,8 +15,10 @@ import {
   CpfJaCadastradoError,
   criarPaciente,
 } from "@/db/pacientes";
+import { aplicarMascaraCpf } from "@/dominio/cpf";
 import { hojeIso } from "@/dominio/idade";
 import {
+  alterarFormularioPaciente,
   DIAS_SEMANA_CONSULTA,
   dadosParaFormulario,
   type ErrosPaciente,
@@ -30,8 +32,18 @@ import {
   SIM_NAO,
   validarFormularioPaciente,
 } from "@/dominio/paciente";
+import { cn } from "@/lib/utils";
 
 type Carga = "carregando" | "pronto" | "erro";
+
+/**
+ * Extras dos dois campos de CPF: máscara a cada tecla e teclado numérico —
+ * o Auto-cadastro roda em tablet, onde o teclado certo economiza toques.
+ */
+const CAMPO_CPF = {
+  mascara: aplicarMascaraCpf,
+  modoEntrada: "numeric",
+} as const satisfies Partial<PropsCampoTexto>;
 
 /**
  * A foto não vive no estado do formulário de texto: ou não há foto, ou há um
@@ -104,6 +116,10 @@ export function PaginaFormularioPaciente({
 
   const hoje = hojeIso();
   const menorDeIdade = ehMenorDeIdade(formulario.dataNascimento, hoje);
+  // Cada "Sim" clínico libera para edição os campos que dependem dele.
+  const fezTerapia = formulario.jaFezTerapia === "Sim";
+  const tomaMedicamento = formulario.tomaMedicamento === "Sim";
+  const foiHospitalizado = formulario.jaFoiHospitalizado === "Sim";
   // No tablet quem toca é o Paciente, "enviando" o próprio cadastro; no
   // desktop é a Terapeuta salvando um registro.
   const rotulosEnvio = tablet
@@ -111,7 +127,7 @@ export function PaginaFormularioPaciente({
     : { botao: "Salvar", executando: "Salvando…" };
 
   const alterar = (campo: keyof FormularioPaciente) => (valor: string) => {
-    const proximo = { ...formulario, [campo]: valor };
+    const proximo = alterarFormularioPaciente(formulario, campo, valor);
     setFormulario(proximo);
     // Depois da primeira tentativa de salvar, os erros reagem a cada tecla.
     if (tentouSalvar) setErros(validarFormularioPaciente(proximo, hoje));
@@ -345,7 +361,7 @@ export function PaginaFormularioPaciente({
             tipo: "date",
           })}
           {campoSelect("genero", "Gênero", GENEROS, { obrigatorio: true })}
-          {campoTexto("cpf", "CPF", { obrigatorio: true })}
+          {campoTexto("cpf", "CPF", { obrigatorio: true, ...CAMPO_CPF })}
           {campoTexto("rg", "RG")}
           {campoSelect("religiao", "Religião", RELIGIOES, {
             obrigatorio: true,
@@ -365,6 +381,7 @@ export function PaginaFormularioPaciente({
           })}
           {campoTexto("cpfResponsavelLegal", "CPF do responsável legal", {
             obrigatorio: menorDeIdade,
+            ...CAMPO_CPF,
           })}
         </SecaoFormulario>
 
@@ -379,47 +396,57 @@ export function PaginaFormularioPaciente({
           {campoTexto("email", "Email", { tipo: "email" })}
         </SecaoFormulario>
 
+        {/* Cada pergunta clínica abre um grupo com os próprios dependentes:
+            todos ficam sempre na tela, só o somente-leitura muda. Assim
+            nenhuma resposta reposiciona os campos das outras perguntas. */}
         <SecaoFormulario titulo="Histórico clínico">
-          {campoSelect("jaFezTerapia", "Já fez terapia?", SIM_NAO, {
-            obrigatorio: true,
-          })}
-          {formulario.jaFezTerapia === "Sim" &&
-            campoTexto("quandoFezTerapia", "Quando fez terapia?", {
+          <GrupoCampos>
+            {campoSelect("jaFezTerapia", "Já fez terapia?", SIM_NAO, {
               obrigatorio: true,
             })}
-          {campoSelect("tomaMedicamento", "Toma algum medicamento?", SIM_NAO, {
-            obrigatorio: true,
-          })}
-          {formulario.tomaMedicamento === "Sim" && (
-            <>
-              {campoTexto(
-                "tomaMedicamentoDesdeQuando",
-                "Toma medicamento desde quando?",
-                { obrigatorio: true },
-              )}
-              {campoTexto("nomesMedicamentos", "Nomes dos medicamentos", {
-                obrigatorio: true,
-              })}
-            </>
-          )}
-          {campoSelect(
-            "jaFoiHospitalizado",
-            "Já foi hospitalizado por questões psicológicas?",
-            SIM_NAO,
-            { obrigatorio: true },
-          )}
-          {formulario.jaFoiHospitalizado === "Sim" && (
-            <>
-              {campoTexto(
-                "quandoFoiHospitalizado",
-                "Quando foi hospitalizado?",
-                { obrigatorio: true },
-              )}
-              {campoTexto("razaoHospitalizacao", "Razão da hospitalização", {
-                obrigatorio: true,
-              })}
-            </>
-          )}
+            {campoTexto("quandoFezTerapia", "Quando fez terapia?", {
+              obrigatorio: fezTerapia,
+              somenteLeitura: !fezTerapia,
+            })}
+          </GrupoCampos>
+          <GrupoCampos>
+            {campoSelect(
+              "tomaMedicamento",
+              "Toma algum medicamento?",
+              SIM_NAO,
+              { obrigatorio: true },
+            )}
+            {campoTexto(
+              "tomaMedicamentoDesdeQuando",
+              "Toma medicamento desde quando?",
+              {
+                obrigatorio: tomaMedicamento,
+                somenteLeitura: !tomaMedicamento,
+              },
+            )}
+            {campoTexto("nomesMedicamentos", "Nomes dos medicamentos", {
+              obrigatorio: tomaMedicamento,
+              somenteLeitura: !tomaMedicamento,
+              larguraTotal: true,
+            })}
+          </GrupoCampos>
+          <GrupoCampos>
+            {campoSelect(
+              "jaFoiHospitalizado",
+              "Já foi hospitalizado por questões psicológicas?",
+              SIM_NAO,
+              { obrigatorio: true },
+            )}
+            {campoTexto("quandoFoiHospitalizado", "Quando foi hospitalizado?", {
+              obrigatorio: foiHospitalizado,
+              somenteLeitura: !foiHospitalizado,
+            })}
+            {campoTexto("razaoHospitalizacao", "Razão da hospitalização", {
+              obrigatorio: foiHospitalizado,
+              somenteLeitura: !foiHospitalizado,
+              larguraTotal: true,
+            })}
+          </GrupoCampos>
         </SecaoFormulario>
 
         {/* Campos que só a Terapeuta define — ocultos no Auto-cadastro
@@ -485,6 +512,16 @@ function SecaoFormulario({
   );
 }
 
+/**
+ * Bloco de campos que começa numa linha nova da grade da seção: mantém
+ * juntos uma pergunta e os campos que dependem dela.
+ */
+function GrupoCampos({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid gap-4 md:col-span-2 md:grid-cols-2">{children}</div>
+  );
+}
+
 interface PropsCampoTexto {
   id: string;
   rotulo: string;
@@ -494,6 +531,13 @@ interface PropsCampoTexto {
   erro?: string;
   dica?: string;
   tipo?: "text" | "date" | "email";
+  /** Campo visível mas não editável — a resposta de que ele depende não é "Sim". */
+  somenteLeitura?: boolean;
+  /** Reescreve o que foi digitado antes de guardar (ex.: máscara de CPF). */
+  mascara?: (valor: string) => string;
+  modoEntrada?: React.ComponentProps<"input">["inputMode"];
+  /** Ocupa a linha inteira da grade, em vez de meia. */
+  larguraTotal?: boolean;
 }
 
 function CampoTexto({
@@ -505,15 +549,27 @@ function CampoTexto({
   erro,
   dica,
   tipo = "text",
+  somenteLeitura = false,
+  mascara,
+  modoEntrada,
+  larguraTotal = false,
 }: PropsCampoTexto) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div
+      className={cn("flex flex-col gap-1.5", larguraTotal && "md:col-span-2")}
+    >
       <RotuloCampo para={id} obrigatorio={obrigatorio} texto={rotulo} />
       <Input
         id={id}
         type={tipo}
         value={valor}
-        onChange={(evento) => aoAlterar(evento.target.value)}
+        onChange={(evento) =>
+          aoAlterar(
+            mascara ? mascara(evento.target.value) : evento.target.value,
+          )
+        }
+        readOnly={somenteLeitura}
+        inputMode={modoEntrada}
         aria-required={obrigatorio}
         aria-invalid={erro ? true : undefined}
         aria-describedby={erro ? `${id}-erro` : undefined}

@@ -109,6 +109,16 @@ Página com tabela paginada (10 por página) de todos os pacientes cadastrados.
 
 Página responsiva para cadastro e edição de pacientes.
 
+**Campos condicionais (nos dois modos):**
+
+- Os campos que dependem de uma pergunta clínica ("Quando fez terapia?", "Toma medicamento desde quando?", "Nomes dos medicamentos", "Quando foi hospitalizado?", "Razão da hospitalização") ficam **sempre visíveis**, agrupados logo abaixo da pergunta de que dependem. Nenhum campo aparece ou some conforme as respostas — o layout não se reorganiza.
+- Enquanto a resposta não for "Sim", o campo dependente fica **somente leitura** e não obrigatório. Ao responder "Sim", torna-se editável e obrigatório.
+- Trocar a resposta de volta para "Não" **limpa** os campos que dependiam dela: o que está na tela é exatamente o que será gravado.
+
+**Máscara de CPF (nos dois modos):**
+
+- Os dois campos de CPF (do paciente e do Responsável legal) aplicam a máscara **000.000.000-00 enquanto o usuário digita**, ignorando o que não é dígito e parando no 11º. No banco o CPF é gravado só com os dígitos.
+
 **Modo tablet (Auto-cadastro pelo paciente):**
 
 - Ao acessar o sistema via navegador na rede local (iPad ou qualquer outro dispositivo), o usuário é redirecionado automaticamente para o formulário de novo paciente.

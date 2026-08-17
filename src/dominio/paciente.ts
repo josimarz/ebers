@@ -123,6 +123,38 @@ export function ehMenorDeIdade(dataNascimento: string, hoje: string): boolean {
   return calcularIdade(dataNascimento, hoje) < 18;
 }
 
+/**
+ * Campos clínicos que só valem quando a pergunta correspondente é "Sim"
+ * (spec 1.1). Ficam sempre na tela, apenas somente-leitura enquanto a
+ * resposta não for "Sim".
+ */
+const DEPENDENTES_CLINICOS: Partial<
+  Record<keyof FormularioPaciente, readonly (keyof FormularioPaciente)[]>
+> = {
+  jaFezTerapia: ["quandoFezTerapia"],
+  tomaMedicamento: ["tomaMedicamentoDesdeQuando", "nomesMedicamentos"],
+  jaFoiHospitalizado: ["quandoFoiHospitalizado", "razaoHospitalizacao"],
+};
+
+/**
+ * Altera um campo do formulário. Responder algo diferente de "Sim" a uma
+ * pergunta clínica esvazia os campos que dependiam dela: o que está na tela
+ * passa a ser exatamente o que formularioParaDados gravaria.
+ */
+export function alterarFormularioPaciente(
+  dados: FormularioPaciente,
+  campo: keyof FormularioPaciente,
+  valor: string,
+): FormularioPaciente {
+  const alterado = { ...dados, [campo]: valor };
+  if (valor !== "Sim") {
+    for (const dependente of DEPENDENTES_CLINICOS[campo] ?? []) {
+      alterado[dependente] = "";
+    }
+  }
+  return alterado;
+}
+
 const CAMPOS_SEMPRE_OBRIGATORIOS = [
   "nomeCompleto",
   "dataNascimento",

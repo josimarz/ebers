@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatarCpf, validarCpf } from "./cpf";
+import { aplicarMascaraCpf, formatarCpf, validarCpf } from "./cpf";
 
 // CPFs de exemplo com dígitos verificadores corretos (calculados pela
 // regra da Receita: pesos 10..2 e 11..2, resto < 2 → 0, senão 11 − resto).
@@ -29,6 +29,25 @@ test("formata 11 dígitos com a máscara de CPF", () => {
 test("deixa intacto o que não tem 11 dígitos", () => {
   expect(formatarCpf("1234")).toBe("1234");
   expect(formatarCpf("")).toBe("");
+});
+
+test("a máscara progressiva acompanha o que já foi digitado", () => {
+  expect(aplicarMascaraCpf("")).toBe("");
+  expect(aplicarMascaraCpf("5")).toBe("5");
+  expect(aplicarMascaraCpf("529")).toBe("529");
+  expect(aplicarMascaraCpf("5299")).toBe("529.9");
+  expect(aplicarMascaraCpf("529982")).toBe("529.982");
+  expect(aplicarMascaraCpf("529982247")).toBe("529.982.247");
+  expect(aplicarMascaraCpf("5299822472")).toBe("529.982.247-2");
+  expect(aplicarMascaraCpf("52998224725")).toBe("529.982.247-25");
+});
+
+test("a máscara ignora o que não é dígito e para no 11º", () => {
+  expect(aplicarMascaraCpf("529.982.247-25")).toBe("529.982.247-25");
+  expect(aplicarMascaraCpf("52998224725999")).toBe("529.982.247-25");
+  expect(aplicarMascaraCpf("abc")).toBe("");
+  // Apagar o separador não devolve nada: quem manda são os dígitos restantes.
+  expect(aplicarMascaraCpf("5299")).toBe(aplicarMascaraCpf("529.9"));
 });
 
 test("rejeita tamanho errado e entrada sem dígitos", () => {

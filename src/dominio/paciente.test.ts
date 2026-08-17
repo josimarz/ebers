@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  alterarFormularioPaciente,
   type DadosPaciente,
   dadosParaFormulario,
   ehMenorDeIdade,
@@ -276,6 +277,53 @@ test("resposta Não descarta o que sobrou nos campos dependentes", () => {
   );
   expect(dados.jaFezTerapia).toBe(false);
   expect(dados.quandoFezTerapia).toBeNull();
+});
+
+test("trocar uma pergunta clínica para Não esvazia os campos que dependiam dela", () => {
+  const preenchido = formularioValido({
+    tomaMedicamento: "Sim",
+    tomaMedicamentoDesdeQuando: "2021",
+    nomesMedicamentos: "Sertralina",
+  });
+
+  const alterado = alterarFormularioPaciente(
+    preenchido,
+    "tomaMedicamento",
+    "Não",
+  );
+
+  expect(alterado.tomaMedicamento).toBe("Não");
+  expect(alterado.tomaMedicamentoDesdeQuando).toBe("");
+  expect(alterado.nomesMedicamentos).toBe("");
+  // Só os dependentes daquela pergunta; o resto do formulário segue intacto.
+  expect(alterado.jaFezTerapia).toBe(preenchido.jaFezTerapia);
+  expect(preenchido.nomesMedicamentos).toBe("Sertralina");
+});
+
+test("responder Sim preserva o que já estava nos campos dependentes", () => {
+  const alterado = alterarFormularioPaciente(
+    formularioValido({ quandoFezTerapia: "2019" }),
+    "jaFezTerapia",
+    "Sim",
+  );
+
+  expect(alterado.quandoFezTerapia).toBe("2019");
+});
+
+test("campo comum é alterado sem mexer em mais nada", () => {
+  const alterado = alterarFormularioPaciente(
+    formularioValido({
+      jaFoiHospitalizado: "Sim",
+      quandoFoiHospitalizado: "2015",
+      razaoHospitalizacao: "Crise",
+    }),
+    "nomeCompleto",
+    "Ana Lima Santos",
+  );
+
+  expect(alterado.nomeCompleto).toBe("Ana Lima Santos");
+  expect(alterado.quandoFoiHospitalizado).toBe("2015");
+  expect(alterado.razaoHospitalizacao).toBe("Crise");
 });
 
 test("registro do banco volta ao formulário para edição", () => {

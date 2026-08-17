@@ -115,22 +115,36 @@ test("menor de 18 anos passa a exigir os três campos do Responsável legal imed
   expect(responsavel()).not.toBeRequired();
 });
 
-test("responder Sim exibe e exige os campos clínicos dependentes", async () => {
+test("campos clínicos dependentes ficam sempre na tela, só de leitura até a resposta ser Sim", async () => {
   const terapeuta = userEvent.setup();
   renderizarFormulario("/pacientes/novo");
 
-  expect(
-    screen.queryByLabelText("Quando fez terapia?"),
-  ).not.toBeInTheDocument();
+  const dependentes = [
+    "Quando fez terapia?",
+    "Toma medicamento desde quando?",
+    "Nomes dos medicamentos",
+    "Quando foi hospitalizado?",
+    "Razão da hospitalização",
+  ];
+  for (const rotulo of dependentes) {
+    const campo = screen.getByLabelText(rotulo);
+    expect(campo).toHaveAttribute("readonly");
+    expect(campo).not.toBeRequired();
+  }
+
   await terapeuta.selectOptions(
     screen.getByLabelText("Já fez terapia?"),
     "Sim",
   );
+  expect(screen.getByLabelText("Quando fez terapia?")).not.toHaveAttribute(
+    "readonly",
+  );
   expect(screen.getByLabelText("Quando fez terapia?")).toBeRequired();
+  // Só os dependentes daquela pergunta saem do somente-leitura.
+  expect(screen.getByLabelText("Nomes dos medicamentos")).toHaveAttribute(
+    "readonly",
+  );
 
-  expect(
-    screen.queryByLabelText("Toma medicamento desde quando?"),
-  ).not.toBeInTheDocument();
   await terapeuta.selectOptions(
     screen.getByLabelText("Toma algum medicamento?"),
     "Sim",
@@ -140,24 +154,36 @@ test("responder Sim exibe e exige os campos clínicos dependentes", async () => 
   ).toBeRequired();
   expect(screen.getByLabelText("Nomes dos medicamentos")).toBeRequired();
 
-  expect(
-    screen.queryByLabelText("Quando foi hospitalizado?"),
-  ).not.toBeInTheDocument();
   await terapeuta.selectOptions(
     screen.getByLabelText("Já foi hospitalizado por questões psicológicas?"),
     "Sim",
   );
   expect(screen.getByLabelText("Quando foi hospitalizado?")).toBeRequired();
   expect(screen.getByLabelText("Razão da hospitalização")).toBeRequired();
+});
 
-  // Voltar para Não esconde os dependentes de novo.
+test("voltar para Não tranca o campo dependente e apaga o que estava nele", async () => {
+  const terapeuta = userEvent.setup();
+  renderizarFormulario("/pacientes/novo");
+
+  await terapeuta.selectOptions(
+    screen.getByLabelText("Já fez terapia?"),
+    "Sim",
+  );
+  await terapeuta.type(
+    screen.getByLabelText("Quando fez terapia?"),
+    "Entre 2018 e 2020",
+  );
+
   await terapeuta.selectOptions(
     screen.getByLabelText("Já fez terapia?"),
     "Não",
   );
-  expect(
-    screen.queryByLabelText("Quando fez terapia?"),
-  ).not.toBeInTheDocument();
+
+  const campo = screen.getByLabelText("Quando fez terapia?");
+  expect(campo).toHaveAttribute("readonly");
+  expect(campo).toHaveValue("");
+  expect(campo).not.toBeRequired();
 });
 
 test("os enums do cadastro oferecem exatamente as opções da spec", () => {
@@ -223,6 +249,30 @@ test("salvar com obrigatórios vazios aponta os campos e não grava nada", async
     (await screen.findAllByText("Campo obrigatório")).length,
   ).toBeGreaterThanOrEqual(9);
   expect(chamadas).toHaveLength(0);
+});
+
+test("CPF ganha a máscara a cada dígito digitado, nos dois campos de CPF", async () => {
+  const terapeuta = userEvent.setup();
+  renderizarFormulario("/pacientes/novo");
+
+  const cpf = screen.getByLabelText("CPF");
+  await terapeuta.type(cpf, "529");
+  expect(cpf).toHaveValue("529");
+  await terapeuta.type(cpf, "9");
+  expect(cpf).toHaveValue("529.9");
+  await terapeuta.type(cpf, "82247");
+  expect(cpf).toHaveValue("529.982.247");
+  // Depois do 11º dígito a máscara está completa e o resto é ignorado.
+  await terapeuta.type(cpf, "25999");
+  expect(cpf).toHaveValue("529.982.247-25");
+
+  await terapeuta.type(
+    screen.getByLabelText("CPF do responsável legal"),
+    "12345678909",
+  );
+  expect(screen.getByLabelText("CPF do responsável legal")).toHaveValue(
+    "123.456.789-09",
+  );
 });
 
 test("CPF com dígitos verificadores errados é apontado e nada é gravado", async () => {

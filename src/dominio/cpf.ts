@@ -1,3 +1,18 @@
+/**
+ * Máscara progressiva de CPF, aplicada a cada tecla: mantém só os dígitos
+ * (no máximo 11) e devolve o quanto de 000.000.000-00 já cabe neles. Os
+ * separadores nunca sobram no fim ("529", não "529."), então apagar de trás
+ * para frente sempre apaga um dígito.
+ */
+export function aplicarMascaraCpf(entrada: string): string {
+  const digitos = entrada.replace(/\D/g, "").slice(0, 11);
+  const grupos = [digitos.slice(0, 3), digitos.slice(3, 6), digitos.slice(6, 9)]
+    .filter((grupo) => grupo !== "")
+    .join(".");
+  const verificadores = digitos.slice(9);
+  return verificadores === "" ? grupos : `${grupos}-${verificadores}`;
+}
+
 /** Aplica a máscara 000.000.000-00 quando a entrada tem 11 dígitos. */
 export function formatarCpf(cpf: string): string {
   const digitos = cpf.replace(/\D/g, "");
