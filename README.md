@@ -23,4 +23,16 @@ mise run test    # testes do frontend (Vitest) e do backend (cargo test)
 mise run lint    # Biome: lint + formatação
 ```
 
+## Distribuição
+
+```sh
+mise run build:macos    # binário universal (Intel + Apple Silicon)
+```
+
+Universal e não só a arquitetura de quem constrói: cada fatia compila com o próprio `cfg`, então o Whisper usa a GPU via Metal no Apple Silicon e a CPU nos Macs Intel, onde a GPU devolve transcrição ilegível. A linha de base de instruções é fixada em [`src-tauri/.cargo/config.toml`](src-tauri/.cargo/config.toml) para o binário não sair sintonizado na máquina de quem compilou. Ver [ADR-0006](docs/adr/0006-build-de-distribuicao-do-whisper.md).
+
+O modelo de voz **não** é empacotado: quem instalar precisa baixá-lo uma vez ([`docs/operacao.md`](docs/operacao.md)). Sem ele o app funciona normalmente e o botão do microfone avisa o que falta.
+
+## Dados
+
 O banco SQLite (`ebers.db`) é criado no diretório de dados do app na primeira execução; as fotos de perfil ficam ao lado dele em `fotos/` e o modelo Whisper da transcrição de voz em `modelos/` (ver [`docs/operacao.md`](docs/operacao.md)); as migrações em [`src-tauri/migrations/`](src-tauri/migrations/) são geradas pelo `drizzle-kit` (`mise run db:generate`) e aplicadas pelo backend Rust na inicialização.
