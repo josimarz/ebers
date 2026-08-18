@@ -35,9 +35,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # Transcrição de voz offline da Consulta (spec 5.3, ADR-0004).
 whisper-rs = "0.16"
 
-# No macOS o Whisper roda na GPU via Metal — dá folga para os modelos maiores
-# (base/small) sem travar a máquina durante a Consulta.
-[target.'cfg(target_os = "macos")'.dependencies]
+# No Apple Silicon o Whisper roda na GPU via Metal — dá folga para os modelos
+# maiores (base/small) sem travar a máquina durante a Consulta. Nos Macs Intel
+# o backend não entra nem na compilação: aquelas GPUs devolvem transcrição
+# ilegível (ver USAR_GPU em src/transcricao.rs) e o Metal ainda cobra ~19 s de
+# compilação de shaders na primeira transcrição.
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
 whisper-rs = { version = "0.16", features = ["metal"] }
 
 [dev-dependencies]

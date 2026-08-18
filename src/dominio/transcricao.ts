@@ -33,12 +33,26 @@ export function reamostrarParaWhisper(
 /** RMS abaixo do qual um bloco captado conta como silêncio (~-40 dBFS). */
 const LIMIAR_SILENCIO_RMS = 0.01;
 
-/** Fala acumulada mínima antes de uma pausa poder fechar o trecho. */
-const TRECHO_MINIMO_S = 2;
+/**
+ * Fala acumulada mínima antes de uma pausa poder fechar o trecho.
+ *
+ * Trecho curto custa precisão: o Whisper decodifica cada um sozinho, sem nada
+ * do que veio antes, e toda costura é uma chance de errar a emenda. Medido
+ * sobre 100 s de ditado real (210 palavras de referência), em erros de
+ * palavra: com 2 s eram 29 trechos e 33 erros; com 12 s são 8 trechos e 22
+ * erros — o mesmo resultado de transcrever a gravação inteira de uma vez.
+ *
+ * O preço é a espera: o texto aparece a cada ~12 s em vez de ~3,5 s.
+ *
+ * Tem de ficar **abaixo** de TRECHO_MAXIMO_S com folga. Se alcançá-lo, a
+ * pausa nunca chega a fechar trecho nenhum e todo corte passa a cair no teto,
+ * no meio da palavra — nessa mesma gravação o erro saltou para 59 palavras.
+ */
+const TRECHO_MINIMO_S = 12;
 /** Pausa de fala que fecha o trecho — a deixa natural do ditado. */
 const PAUSA_PARA_FECHAR_S = 0.6;
 /** Fala contínua nunca segura um trecho além disto. */
-const TRECHO_MAXIMO_S = 10;
+const TRECHO_MAXIMO_S = 28;
 
 function ehSilencio(bloco: Float32Array): boolean {
   let soma = 0;

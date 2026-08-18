@@ -73,17 +73,17 @@ test("áudio já a 16 kHz sai como entrou", () => {
 test("a pausa depois da fala fecha o trecho, com a fala preservada", () => {
   const acumulador = new AcumuladorDeAudio(16000);
 
-  // 2 s de fala: nada emitido ainda.
-  expect(alimentar(acumulador, 16000, [0.25, 0.25, 0.25, 0.25])).toEqual([]);
+  // 12 s de fala: nada emitido ainda.
+  expect(alimentar(acumulador, 16000, Array(24).fill(0.25))).toEqual([]);
   // 0,5 s de pausa ainda não fecha o trecho…
   expect(acumulador.registrar(bloco(0.5, 0, 16000))).toBeNull();
-  // …1 s de pausa fecha: 3 s de áudio, fala na frente, pausa no fim.
+  // …1 s de pausa fecha: 13 s de áudio, fala na frente, pausa no fim.
   const trecho = acumulador.registrar(bloco(0.5, 0, 16000));
 
   expect(trecho).not.toBeNull();
-  expect(trecho).toHaveLength(3 * 16000);
+  expect(trecho).toHaveLength(13 * 16000);
   expect(trecho?.[0]).toBe(0.25);
-  expect(trecho?.[3 * 16000 - 1]).toBe(0);
+  expect(trecho?.[13 * 16000 - 1]).toBe(0);
 
   // A janela recomeça vazia: silêncio novo não emite nada.
   expect(acumulador.registrar(bloco(0.5, 0, 16000))).toBeNull();
@@ -92,20 +92,20 @@ test("a pausa depois da fala fecha o trecho, com a fala preservada", () => {
 test("fala contínua sem pausa é cortada na duração máxima", () => {
   const acumulador = new AcumuladorDeAudio(16000);
 
-  // 9,5 s de fala ininterrupta: nada emitido…
-  expect(alimentar(acumulador, 16000, Array(19).fill(0.25))).toEqual([]);
-  // …no bloco que completa 10 s, o trecho sai inteiro.
+  // 27,5 s de fala ininterrupta: nada emitido…
+  expect(alimentar(acumulador, 16000, Array(55).fill(0.25))).toEqual([]);
+  // …no bloco que completa 28 s, o trecho sai inteiro.
   const trecho = acumulador.registrar(bloco(0.5, 0.25, 16000));
 
-  expect(trecho).toHaveLength(10 * 16000);
+  expect(trecho).toHaveLength(28 * 16000);
   expect(trecho?.[0]).toBe(0.25);
 });
 
 test("silêncio, por mais longo que seja, nunca vira trecho a transcrever", () => {
   const acumulador = new AcumuladorDeAudio(16000);
 
-  // 12 s de silêncio: passa pelos pontos de decisão da pausa e do máximo.
-  const trechos = alimentar(acumulador, 16000, Array(24).fill(0));
+  // 30 s de silêncio: passa pelos pontos de decisão da pausa e do máximo.
+  const trechos = alimentar(acumulador, 16000, Array(60).fill(0));
 
   expect(trechos).toEqual([]);
   expect(acumulador.descarregar()).toBeNull();
@@ -114,7 +114,7 @@ test("silêncio, por mais longo que seja, nunca vira trecho a transcrever", () =
 test("ruído baixo de fundo conta como silêncio, não como fala", () => {
   const acumulador = new AcumuladorDeAudio(16000);
 
-  const trechos = alimentar(acumulador, 16000, Array(24).fill(0.005));
+  const trechos = alimentar(acumulador, 16000, Array(60).fill(0.005));
 
   expect(trechos).toEqual([]);
   expect(acumulador.descarregar()).toBeNull();
@@ -123,11 +123,11 @@ test("ruído baixo de fundo conta como silêncio, não como fala", () => {
 test("captura a 48 kHz sai no trecho já na taxa do Whisper", () => {
   const acumulador = new AcumuladorDeAudio(48000);
 
-  expect(alimentar(acumulador, 48000, [0.25, 0.25, 0.25, 0.25])).toEqual([]);
+  expect(alimentar(acumulador, 48000, Array(24).fill(0.25))).toEqual([]);
   const trecho = acumulador.registrar(bloco(1, 0, 48000));
 
-  // 3 s de áudio captado → 3 s × 16000 amostras.
-  expect(trecho).toHaveLength(3 * 16000);
+  // 13 s de áudio captado → 13 s × 16000 amostras.
+  expect(trecho).toHaveLength(13 * 16000);
   expect(trecho?.[0]).toBe(0.25);
 });
 

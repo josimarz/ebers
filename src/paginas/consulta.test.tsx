@@ -629,20 +629,20 @@ test("com o microfone ligado, a fala transcrita entra no Conteúdo e é salva so
     screen.getByRole("button", { name: "Desligar microfone" }),
   ).toBeInTheDocument();
 
-  // 2 s de fala e 1 s de pausa fecham um trecho; o Whisper falso responde.
+  // 12 s de fala e 1 s de pausa fecham um trecho; o Whisper falso responde.
   programarComando("transcrever_audio", " Sentiu ansiedade na semana. ");
-  await captar(2, 0.25);
+  await captar(12, 0.25);
   await captar(1, 0);
 
   expect(screen.getByLabelText("Conteúdo")).toHaveValue(
     "Relato até aqui. Sentiu ansiedade na semana.",
   );
-  // O trecho cruzou a fronteira como bytes crus: 3 s × 16 kHz × 4 bytes.
+  // O trecho cruzou a fronteira como bytes crus: 13 s × 16 kHz × 4 bytes.
   const envios = chamadasDeComando.filter(
     (chamada) => chamada.comando === "transcrever_audio",
   );
   expect(envios).toHaveLength(1);
-  expect((envios[0].argumentos as Uint8Array).byteLength).toBe(3 * 16000 * 4);
+  expect((envios[0].argumentos as Uint8Array).byteLength).toBe(13 * 16000 * 4);
 
   // O salvamento automático grava o Conteúdo com a transcrição anexada.
   await passar(600);
@@ -747,7 +747,7 @@ test("falha na transcrição desliga o microfone e avisa", async () => {
   await ligarMicrofone(terapeuta);
 
   programarErroDeComando("transcrever_audio", "sem memória");
-  await captar(2, 0.25);
+  await captar(12, 0.25);
   await captar(1, 0);
 
   expect(capturaEstaAtiva()).toBe(false);

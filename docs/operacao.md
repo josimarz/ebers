@@ -24,14 +24,16 @@ campo Conteúdo — todo o processamento acontece no próprio computador, nenhum
 ([ADR-0004](./adr/0004-transcricao-offline-com-whisper.md)). Antes do
 primeiro uso, é preciso baixar o modelo de voz, uma única vez:
 
-1. Baixe **um** dos modelos abaixo (quanto maior, melhor a transcrição —
-   escolha o que o computador comportar):
+1. Baixe **um** dos modelos abaixo. Comece pelo `small`: ele erra menos da
+   metade das palavras que o `base` e ainda transcreve mais rápido do que se
+   fala, mesmo num computador de 2019. Só desça na tabela se a máquina não
+   acompanhar.
 
    | Modelo | Arquivo | Tamanho | Indicado para |
    | --- | --- | --- | --- |
-   | small | [`ggml-small.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin) | ~466 MB | computadores recentes (ex.: Mac com Apple Silicon) |
-   | base | [`ggml-base.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin) | ~142 MB | o equilíbrio para a maioria das máquinas |
-   | tiny | [`ggml-tiny.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin) | ~75 MB | computadores mais antigos |
+   | small | [`ggml-small.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin) | ~466 MB | a escolha recomendada, bem melhor em português |
+   | base | [`ggml-base.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin) | ~142 MB | máquinas mais modestas, com perda visível de precisão |
+   | tiny | [`ggml-tiny.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin) | ~75 MB | último recurso, só para computadores antigos |
 
 2. Crie a subpasta `modelos` dentro da pasta de dados do Ebers (tabela em
    "Onde ficam os dados", abaixo) e mova o arquivo baixado para lá, **sem

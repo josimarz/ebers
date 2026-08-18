@@ -24,6 +24,20 @@ pub const MODELOS_POR_QUALIDADE: [&str; 3] =
 /// Taxa de amostragem que o whisper.cpp espera (16 kHz mono).
 pub const TAXA_AMOSTRAGEM: usize = 16000;
 
+/// Se a inferência pode ir para a GPU.
+///
+/// O único backend de GPU que o projeto compila é o Metal, no macOS
+/// (Cargo.toml) — e ele só é confiável nas GPUs da Apple. Num Mac Intel a GPU
+/// é AMD/Intel e não tem `simdgroup matrix mul`; por ali os kernels do ggml
+/// devolvem transcrição ilegível — tokens soltos em outros idiomas, diferentes
+/// a cada execução, sem erro nenhum que denuncie a falha. Medido num
+/// i7-9750H/Radeon Pro 5300M com o modelo `base`: na GPU, "-" e "ăиче" para a
+/// mesma frase que a CPU transcreve inteira e de forma estável.
+///
+/// A CPU dá conta com folga: ~3,7× mais rápido que o tempo real nessa mesma
+/// máquina, bem dentro do ditado da Consulta.
+pub const USAR_GPU: bool = cfg!(all(target_os = "macos", target_arch = "aarch64"));
+
 /// Amostras na duração mínima segura: 1,1 s — o whisper.cpp rejeita áudio
 /// com menos de ~1 s.
 const DURACAO_MINIMA_AMOSTRAS: usize = TAXA_AMOSTRAGEM + TAXA_AMOSTRAGEM / 10;
@@ -85,11 +99,12 @@ impl Transcritor {
                 return Ok(Arc::clone(&modelo.contexto));
             }
         }
+        let mut parametros = WhisperContextParameters::default();
+        parametros.use_gpu(USAR_GPU);
         let contexto = Arc::new(
-            WhisperContext::new_with_params(caminho, WhisperContextParameters::default())
-                .map_err(|erro| {
-                    format!("Não foi possível carregar o modelo de transcrição: {erro}")
-                })?,
+            WhisperContext::new_with_params(caminho, parametros).map_err(|erro| {
+                format!("Não foi possível carregar o modelo de transcrição: {erro}")
+            })?,
         );
         *carregado = Some(ModeloCarregado {
             caminho: caminho.to_path_buf(),
@@ -186,6 +201,22 @@ mod testes {
         criar_modelo(pasta.path(), "ggml-large.bin");
 
         assert_eq!(localizar_modelo(pasta.path()), None);
+    }
+
+    /// Regressão: a GPU só entra onde o Metal é confiável. Num Mac Intel a
+    /// transcrição sai ilegível — e sem erro algum, então nenhuma outra
+    /// verificação pega isso. Se um dia o backend passar a valer para mais
+    /// hardware, que seja com este teste na mão e áudio real conferido.
+    #[test]
+    fn a_gpu_so_e_usada_no_apple_silicon() {
+        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            assert!(USAR_GPU, "no Apple Silicon o Metal acelera e é confiável");
+        } else {
+            assert!(
+                !USAR_GPU,
+                "fora do Apple Silicon a inferência tem de ficar na CPU"
+            );
+        }
     }
 
     #[test]
