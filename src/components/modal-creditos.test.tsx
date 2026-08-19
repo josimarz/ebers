@@ -240,3 +240,14 @@ test("Fechar aciona aoFechar", async () => {
 
   expect(aoFechar).toHaveBeenCalled();
 });
+
+// Regressão do bug de transparência: neste tema `bg-popover` é transparente e
+// o painel só ganha fundo pela utility de vidro (dialog.tsx). O jsdom não
+// carrega CSS, então a classe é o único sinal ao alcance do teste.
+test("o painel da modal usa a superfície de vidro sobreposta", async () => {
+  enfileirarSelect([]);
+  renderizarModal();
+  await screen.findByText("0 créditos");
+
+  expect(screen.getByRole("dialog")).toHaveClass("glass-frosted");
+});

@@ -89,7 +89,7 @@ export function FiltroPaciente({
           id="opcoes-filtro-paciente"
           role="listbox"
           aria-label="Pacientes"
-          className="glass-bg absolute top-full right-0 left-0 z-10 mt-1 max-h-64 overflow-y-auto rounded-lg border border-input py-1 shadow-md"
+          className="glass-frosted absolute top-full right-0 left-0 z-10 mt-1 max-h-64 overflow-y-auto rounded-lg py-1"
         >
           {sugeridos.map((paciente) => (
             <button

@@ -36,7 +36,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 z-50 bg-black/40 duration-100 supports-backdrop-filter:backdrop-blur-(--blur) data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}
@@ -44,6 +44,19 @@ function DialogOverlay({
   );
 }
 
+/**
+ * No tema Glass UI os tokens de superfície (`--background`, `--card`,
+ * `--popover`) são transparentes de propósito: a opacidade vem das utilities
+ * `.glass-*` do index.css. Por isso o painel não usa `bg-popover` (que seria
+ * fundo nenhum) e sim `glass-frosted` — o degrau acima do `.glass-bg` das
+ * seções das páginas, com mais opacidade, blur de 25px, borda e sombra
+ * próprias. Regra da casa: superfície de página = `.glass-bg`, superfície
+ * sobreposta (modal) = `.glass-frosted`.
+ *
+ * Véu e painel são um par: o Content é irmão do Overlay dentro do mesmo
+ * backdrop root, então o `backdrop-filter` do painel amostra o véu — mexer no
+ * alpha de um muda a cor do outro. As mesmas duas strings existem em sheet.tsx.
+ */
 function DialogContent({
   className,
   children,
@@ -58,7 +71,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100svh-4rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-xl border bg-popover bg-clip-padding p-6 text-sm text-popover-foreground shadow-lg duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "glass-frosted fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100svh-4rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-xl p-6 text-sm text-popover-foreground duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className,
         )}
         {...props}

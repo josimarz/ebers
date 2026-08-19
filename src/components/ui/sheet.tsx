@@ -26,6 +26,10 @@ function SheetPortal({
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />;
 }
 
+/**
+ * Véu igual ao do Dialog, byte a byte: se mexer aqui, mexa também em
+ * dialog.tsx — não há módulo compartilhado entre as duas primitivas.
+ */
 function SheetOverlay({
   className,
   ...props
@@ -34,7 +38,7 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 z-50 bg-black/40 duration-100 supports-backdrop-filter:backdrop-blur-(--blur) data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}
@@ -42,6 +46,13 @@ function SheetOverlay({
   );
 }
 
+/**
+ * Ao contrário do Dialog, o fundo aqui vem do consumidor: `bg-popover` é
+ * transparente neste tema, então todo `<SheetContent>` precisa passar uma
+ * superfície própria (o menu lateral passa `bg-sidebar`, chapado como a
+ * sidebar do desktop). Não aplicamos `glass-frosted` na primitiva para não
+ * trocar a gaveta por vidro e fazê-la divergir da sidebar do desktop.
+ */
 function SheetContent({
   className,
   children,
