@@ -6,6 +6,7 @@ Sistema de gerenciamento de pacientes e consultas para o consultório de psicolo
 - Glossário do domínio: [`CONTEXT.md`](CONTEXT.md)
 - Decisões de arquitetura: [`docs/adr/`](docs/adr/)
 - Operação (backup manual): [`docs/operacao.md`](docs/operacao.md)
+- Pesquisas que embasam decisões: [`docs/pesquisa/`](docs/pesquisa/)
 
 ## Stack
 

@@ -1,3 +1,4 @@
+import { Mic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { BotaoMicrofone } from "@/components/botao-microfone";
@@ -255,6 +256,8 @@ function CampoDaConsulta({
   aoSalvar,
 }: PropsCampoDaConsulta) {
   const [valor, setValor] = useState(valorInicial);
+  // A Prévia (ADR-0007) vive fora do valor: nunca é salva nem editável.
+  const [previa, setPrevia] = useState("");
   // Digitação e transcrição alteram o mesmo texto por um único caminho; o ref
   // dá à transcrição (callback fora do render) o valor mais recente.
   const valorRef = useRef(valorInicial);
@@ -280,6 +283,7 @@ function CampoDaConsulta({
             aoTranscrever={(texto) =>
               alterar(anexarTranscricao(valorRef.current, texto))
             }
+            aoMudarPrevia={setPrevia}
           />
         )}
       </div>
@@ -290,6 +294,13 @@ function CampoDaConsulta({
         onChange={(evento) => alterar(evento.target.value)}
         className="glass-bg min-h-64 flex-1 resize-y rounded-xl p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
       />
+      {previa !== "" && (
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <Mic className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span className="sr-only">Prévia:</span>
+          <span>{previa}</span>
+        </p>
+      )}
     </div>
   );
 }

@@ -11,12 +11,16 @@ export async function modeloDeTranscricao(): Promise<string | null> {
   return await invoke<string | null>("modelo_de_transcricao");
 }
 
+/** As amostras como corpo bruto de um invoke: f32 little-endian, sem cópia. */
+export function bytesDasAmostras(amostras: Float32Array): Uint8Array {
+  return new Uint8Array(
+    amostras.buffer,
+    amostras.byteOffset,
+    amostras.byteLength,
+  );
+}
+
 /** Transcreve um trecho de áudio (16 kHz mono) e devolve o texto em pt-BR. */
 export async function transcreverAudio(trecho: Float32Array): Promise<string> {
-  const bytes = new Uint8Array(
-    trecho.buffer,
-    trecho.byteOffset,
-    trecho.byteLength,
-  );
-  return await invoke<string>("transcrever_audio", bytes);
+  return await invoke<string>("transcrever_audio", bytesDasAmostras(trecho));
 }

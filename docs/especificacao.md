@@ -199,7 +199,8 @@ Acionada pelo botão "Nova Consulta" na listagem de pacientes.
 **Microfone (transcrição de voz):**
 
 - Botão para ligar/desligar o microfone.
-- Enquanto o microfone estiver ligado, o áudio captado é transcrito automaticamente no campo **Conteúdo**.
+- Enquanto o microfone estiver ligado, o áudio captado é transcrito automaticamente no campo **Conteúdo** (a Transcrição).
+- **Prévia** ([ADR-0007](./adr/0007-previa-da-transcricao-pelo-reconhecedor-da-apple.md)): com o microfone ligado, uma linha em cor atenuada abaixo do Conteúdo mostra o que está sendo ouvido naquele momento, em menos de um segundo. A Prévia pode mudar enquanto se fala, nunca entra no valor do Conteúdo nem é salva, e some quando a Transcrição correspondente entra no Conteúdo. Só existe no macOS (13 ou mais novo) com o reconhecimento de fala on-device em pt-BR preparado; quando não está disponível, o microfone funciona só com a Transcrição e um aviso discreto aparece uma única vez por execução do app.
 
 **Funcionalidades do editor HTML (Notas):** negrito, itálico, sublinhado, riscado, cores básicas, tamanho de fonte, títulos (h1–h6).
 
@@ -399,6 +400,15 @@ Decisão em [ADR-0004](./adr/0004-transcricao-offline-com-whisper.md).
 
 ```
 [Frontend: captura áudio (Web Audio API)] → invoke("transcrever_audio", amostras f32 no corpo bruto) → [Backend Rust: whisper-rs] → texto transcrito
+```
+
+#### Prévia (só macOS)
+
+Decisão em [ADR-0007](./adr/0007-previa-da-transcricao-pelo-reconhecedor-da-apple.md). O mesmo áudio captado alimenta, bloco a bloco, o reconhecedor de fala do macOS (`SFSpeechRecognizer`, `requiresOnDeviceRecognition`) via `objc2-speech`; sem reconhecimento on-device disponível a Prévia não inicia — nunca o servidor da Apple. O reconhecedor trabalha em janelas numeradas, uma por trecho do Whisper: fechar o trecho encerra a janela e abre a seguinte, e a Prévia da janela é descartada quando a Transcrição dela entra no Conteúdo.
+
+```
+[Frontend] → invoke("previa_iniciar", canal) / invoke("previa_audio", amostras f32) / invoke("previa_fechar_janela") / invoke("previa_parar")
+[Backend Rust: previa.rs] → Channel { tipo: "texto" | "erro", janela, … } → [Frontend: linha da Prévia]
 ```
 
 ### 5.4 Linting e formatação: Biome

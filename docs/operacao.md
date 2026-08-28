@@ -45,6 +45,29 @@ primeiro uso, é preciso baixar o modelo de voz, uma única vez:
 > permita. Se o botão avisar "Modelo de transcrição não instalado", confira o
 > nome e o lugar do arquivo.
 
+### Prévia: o texto ao vivo (só no macOS)
+
+Enquanto o Whisper transcreve com calma, uma linha em cinza abaixo do campo
+Conteúdo mostra o que o microfone está ouvindo naquele momento — a Prévia.
+Ela aparece em menos de um segundo, pode se corrigir enquanto você fala e
+some quando a transcrição definitiva entra no Conteúdo. Nada dela é salvo, e
+o reconhecimento acontece no próprio computador
+([ADR-0007](./adr/0007-previa-da-transcricao-pelo-reconhecedor-da-apple.md)).
+
+A Prévia usa o reconhecimento de fala do próprio macOS (13 ou mais novo), que
+precisa estar preparado para português do Brasil:
+
+1. Abra **Ajustes do Sistema › Teclado** e, em **Ditado**, ligue o Ditado.
+2. Em **Idiomas** do Ditado, adicione **Português (Brasil)** e aguarde o
+   download do modelo de voz (uma vez, com internet).
+3. Ao ligar o microfone pela primeira vez depois disso, o sistema pergunta se
+   o Ebers pode usar o **Reconhecimento de Fala** — permita. É uma permissão
+   separada da do microfone.
+
+> Se o botão avisar "Prévia indisponível", a transcrição continua funcionando
+> normalmente pelo Whisper — só a linha ao vivo deixa de aparecer. Confira os
+> três passos acima; o aviso aparece uma única vez por abertura do app.
+
 ## Backup manual
 
 Todos os dados do Ebers vivem em **uma única pasta** do

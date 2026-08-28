@@ -5,6 +5,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub mod cpf;
 pub mod fotos;
+pub mod previa;
 pub mod servidor;
 pub mod transcricao;
 
@@ -115,10 +116,7 @@ fn transcrever_audio(
     transcritor: tauri::State<'_, transcricao::Transcritor>,
     requisicao: tauri::ipc::Request<'_>,
 ) -> Result<String, String> {
-    let tauri::ipc::InvokeBody::Raw(dados) = requisicao.body() else {
-        return Err("Esperava as amostras de áudio no corpo da chamada".into());
-    };
-    let amostras = transcricao::amostras_do_corpo(dados)?;
+    let amostras = transcricao::amostras_da_requisicao(&requisicao)?;
     if amostras.is_empty() {
         return Ok(String::new());
     }
@@ -126,6 +124,42 @@ fn transcrever_audio(
         .ok_or("Nenhum modelo de transcrição em modelos/ (docs/operacao.md)")?;
     let contexto = transcritor.contexto(&caminho)?;
     transcricao::transcrever(&contexto, &transcricao::com_duracao_minima(amostras))
+}
+
+/// A Prévia (ADR-0007) pode ser mostrada nesta máquina? Pede a permissão
+/// de Reconhecimento de Fala se ainda não foi decidida — daí `async`: espera
+/// a resposta da terapeuta fora da thread principal.
+#[tauri::command(async)]
+fn previa_disponibilidade() -> previa::Disponibilidade {
+    previa::Previa::disponibilidade()
+}
+
+/// Abre a Prévia; os eventos de cada janela chegam pelo canal.
+#[tauri::command]
+fn previa_iniciar(
+    previa: tauri::State<'_, previa::Previa>,
+    canal: tauri::ipc::Channel<previa::EventoPrevia>,
+) -> Result<(), String> {
+    previa.iniciar(canal)
+}
+
+/// Recebe um bloco captado (f32 LE, 16 kHz mono) como corpo bruto do invoke.
+#[tauri::command]
+fn previa_audio(
+    previa: tauri::State<'_, previa::Previa>,
+    requisicao: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    previa.audio(transcricao::amostras_da_requisicao(&requisicao)?)
+}
+
+#[tauri::command]
+fn previa_fechar_janela(previa: tauri::State<'_, previa::Previa>) -> Result<(), String> {
+    previa.fechar_janela()
+}
+
+#[tauri::command]
+fn previa_parar(previa: tauri::State<'_, previa::Previa>) -> Result<(), String> {
+    previa.parar()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -138,12 +172,18 @@ pub fn run() {
                 .build(),
         )
         .manage(transcricao::Transcritor::default())
+        .manage(previa::Previa::default())
         .invoke_handler(tauri::generate_handler![
             salvar_foto_paciente,
             carregar_foto_paciente,
             remover_foto_paciente,
             modelo_de_transcricao,
-            transcrever_audio
+            transcrever_audio,
+            previa_disponibilidade,
+            previa_iniciar,
+            previa_audio,
+            previa_fechar_janela,
+            previa_parar
         ])
         .setup(|app| {
             // O servidor do Auto-cadastro sobe junto com o app (spec 5.1);

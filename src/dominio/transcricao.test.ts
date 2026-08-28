@@ -17,7 +17,10 @@ function alimentar(
   amplitudes: number[],
 ) {
   return amplitudes
-    .map((amplitude) => acumulador.registrar(bloco(0.5, amplitude, taxa)))
+    .map(
+      (amplitude) =>
+        acumulador.registrar(bloco(0.5, amplitude, taxa))?.trecho ?? null,
+    )
     .filter((trecho) => trecho !== null);
 }
 
@@ -78,7 +81,7 @@ test("a pausa depois da fala fecha o trecho, com a fala preservada", () => {
   // 0,5 s de pausa ainda não fecha o trecho…
   expect(acumulador.registrar(bloco(0.5, 0, 16000))).toBeNull();
   // …1 s de pausa fecha: 13 s de áudio, fala na frente, pausa no fim.
-  const trecho = acumulador.registrar(bloco(0.5, 0, 16000));
+  const trecho = acumulador.registrar(bloco(0.5, 0, 16000))?.trecho;
 
   expect(trecho).not.toBeNull();
   expect(trecho).toHaveLength(13 * 16000);
@@ -95,7 +98,7 @@ test("fala contínua sem pausa é cortada na duração máxima", () => {
   // 27,5 s de fala ininterrupta: nada emitido…
   expect(alimentar(acumulador, 16000, Array(55).fill(0.25))).toEqual([]);
   // …no bloco que completa 28 s, o trecho sai inteiro.
-  const trecho = acumulador.registrar(bloco(0.5, 0.25, 16000));
+  const trecho = acumulador.registrar(bloco(0.5, 0.25, 16000))?.trecho;
 
   expect(trecho).toHaveLength(28 * 16000);
   expect(trecho?.[0]).toBe(0.25);
@@ -111,6 +114,19 @@ test("silêncio, por mais longo que seja, nunca vira trecho a transcrever", () =
   expect(acumulador.descarregar()).toBeNull();
 });
 
+test("silêncio longo fecha janelas vazias — sem trecho, mas sinalizadas", () => {
+  const acumulador = new AcumuladorDeAudio(16000);
+
+  // 11,5 s de silêncio: a janela segue aberta…
+  const cortes = Array(23)
+    .fill(0)
+    .map((amplitude) => acumulador.registrar(bloco(0.5, amplitude, 16000)));
+  expect(cortes.every((corte) => corte === null)).toBe(true);
+  // …aos 12 s ela fecha vazia: a Prévia precisa recomeçar a janela mesmo
+  // sem nada para o Whisper transcrever.
+  expect(acumulador.registrar(bloco(0.5, 0, 16000))).toEqual({ trecho: null });
+});
+
 test("ruído baixo de fundo conta como silêncio, não como fala", () => {
   const acumulador = new AcumuladorDeAudio(16000);
 
@@ -124,7 +140,7 @@ test("captura a 48 kHz sai no trecho já na taxa do Whisper", () => {
   const acumulador = new AcumuladorDeAudio(48000);
 
   expect(alimentar(acumulador, 48000, Array(24).fill(0.25))).toEqual([]);
-  const trecho = acumulador.registrar(bloco(1, 0, 48000));
+  const trecho = acumulador.registrar(bloco(1, 0, 48000))?.trecho;
 
   // 13 s de áudio captado → 13 s × 16000 amostras.
   expect(trecho).toHaveLength(13 * 16000);

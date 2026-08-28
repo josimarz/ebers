@@ -25,6 +25,17 @@ import {
   enfileirarSelect,
   reiniciarBancoFalso,
 } from "@/testes/plugin-sql-falso";
+import {
+  amostrasRecebidasPelaPrevia,
+  emitirErroDaPrevia,
+  emitirTextoDaPrevia,
+  janelasFechadasDaPrevia,
+  previaEstaAtiva,
+  programarFalhaAoIniciarPrevia,
+  programarPreviaIndisponivel,
+  programarPreviaInexistente,
+  reiniciarPreviaFalsa,
+} from "@/testes/previa-falsa";
 import { PaginaConsulta } from "./consulta";
 
 // Fronteiras do sistema: o banco SQLite atrás do tauri-plugin-sql, os
@@ -34,6 +45,7 @@ import { PaginaConsulta } from "./consulta";
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
 vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
 vi.mock("@/lib/captura-audio", () => import("@/testes/captura-falsa"));
+vi.mock("@/db/previa", () => import("@/testes/previa-falsa"));
 
 const AGORA_ISO = "2026-08-08T14:00:00.000Z";
 
@@ -41,6 +53,7 @@ beforeEach(() => {
   reiniciarBancoFalso();
   reiniciarComandosFalsos();
   reiniciarCapturaFalsa();
+  reiniciarPreviaFalsa();
   // Timers falsos por inteiro: o timer da consulta e o salvamento automático
   // andam com vi.advanceTimersByTime; a carga da página é liberada com um
   // act assíncrono (só microtarefas), então findBy*/waitFor não são usados.
@@ -650,6 +663,267 @@ test("com o microfone ligado, a fala transcrita entra no Conteúdo e é salva so
   expect(atualizacoesDe("conteudo")[0].valores[0]).toBe(
     "Relato até aqui. Sentiu ansiedade na semana.",
   );
+});
+
+test("a Prévia mostra o que o microfone ouve até a Transcrição da janela entrar no Conteúdo", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta({ conteudo: "Relato até aqui." });
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+  expect(previaEstaAtiva()).toBe(true);
+
+  // O reconhecedor devolve o que vai ouvindo na janela 1 — e só a Prévia
+  // muda; o Conteúdo continua intacto.
+  await act(async () => {
+    emitirTextoDaPrevia(1, "Sentiu ansiedade");
+  });
+  expect(screen.getByText("Sentiu ansiedade")).toBeInTheDocument();
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("Relato até aqui.");
+  await act(async () => {
+    emitirTextoDaPrevia(1, "Sentiu ansiedade na semana");
+  });
+  expect(screen.getByText("Sentiu ansiedade na semana")).toBeInTheDocument();
+
+  // 12 s de fala e 1 s de pausa fecham o trecho: a janela 1 fecha e a 2
+  // abre; quando a Transcrição entra no Conteúdo, a Prévia da janela some.
+  programarComando("transcrever_audio", " Sentiu ansiedade na semana. ");
+  await captar(12, 0.25);
+  await captar(1, 0);
+  expect(janelasFechadasDaPrevia()).toBe(1);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue(
+    "Relato até aqui. Sentiu ansiedade na semana.",
+  );
+  expect(
+    screen.queryByText("Sentiu ansiedade na semana"),
+  ).not.toBeInTheDocument();
+  // O mesmo áudio captado alimentou a Prévia: 13 s a 16 kHz.
+  expect(amostrasRecebidasPelaPrevia()).toBe(13 * 16000);
+});
+
+test("sem Prévia disponível, o microfone funciona só com o Whisper e avisa uma vez", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+
+  programarPreviaIndisponivel();
+  await ligarMicrofone(terapeuta);
+  expect(capturaEstaAtiva()).toBe(true);
+  expect(previaEstaAtiva()).toBe(false);
+  expect(
+    screen.getByText("Prévia indisponível — veja o guia de operação."),
+  ).toBeInTheDocument();
+
+  // A Transcrição segue chegando pelo Whisper.
+  programarComando("transcrever_audio", "Segue sem Prévia.");
+  await captar(12, 0.25);
+  await captar(1, 0);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("Segue sem Prévia.");
+  expect(amostrasRecebidasPelaPrevia()).toBe(0);
+
+  // Religar não repete o aviso: ele aparece uma vez por execução do app.
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Desligar microfone" }),
+  );
+  await act(async () => {});
+  await ligarMicrofone(terapeuta);
+  expect(
+    screen.queryByText("Prévia indisponível — veja o guia de operação."),
+  ).not.toBeInTheDocument();
+});
+
+test("onde a Prévia não existe (fora do macOS), nada muda — nem aviso", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+
+  programarPreviaInexistente();
+  await ligarMicrofone(terapeuta);
+  expect(capturaEstaAtiva()).toBe(true);
+  expect(previaEstaAtiva()).toBe(false);
+  expect(
+    screen.queryByText("Prévia indisponível — veja o guia de operação."),
+  ).not.toBeInTheDocument();
+
+  programarComando("transcrever_audio", "Segue como sempre.");
+  await captar(12, 0.25);
+  await captar(1, 0);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("Segue como sempre.");
+});
+
+test("se abrir a Prévia falha, o microfone segue só com o Whisper e avisa", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+
+  programarFalhaAoIniciarPrevia(new Error("Siri and Dictation are disabled"));
+  await ligarMicrofone(terapeuta);
+  expect(capturaEstaAtiva()).toBe(true);
+  expect(previaEstaAtiva()).toBe(false);
+  expect(
+    screen.getByText("Prévia indisponível — veja o guia de operação."),
+  ).toBeInTheDocument();
+});
+
+test("digitar com a Prévia na tela: o Conteúdo recebe o digitado e a Prévia segue na linha", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta({ conteudo: "" });
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  await act(async () => {
+    emitirTextoDaPrevia(1, "Sentiu ansiedade");
+  });
+  await terapeuta.type(
+    screen.getByLabelText("Conteúdo"),
+    "Anotação da terapeuta.",
+  );
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue(
+    "Anotação da terapeuta.",
+  );
+  expect(screen.getByText("Sentiu ansiedade")).toBeInTheDocument();
+
+  // A Transcrição entra no fim do que foi digitado, como sempre.
+  programarComando("transcrever_audio", "Sentiu ansiedade na semana.");
+  await captar(12, 0.25);
+  await captar(1, 0);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue(
+    "Anotação da terapeuta. Sentiu ansiedade na semana.",
+  );
+  expect(screen.queryByText("Sentiu ansiedade")).not.toBeInTheDocument();
+});
+
+test("silêncio longo fecha a janela da Prévia mesmo sem trecho para o Whisper", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  // 12 s sem fala: o acumulador fecha a janela vazia — nada vai ao Whisper,
+  // mas o reconhecedor recomeça, para nunca viver além de um trecho.
+  await captar(12, 0);
+  expect(janelasFechadasDaPrevia()).toBe(1);
+  expect(
+    chamadasDeComando.filter(
+      (chamada) => chamada.comando === "transcrever_audio",
+    ),
+  ).toHaveLength(0);
+  expect(previaEstaAtiva()).toBe(true);
+
+  await act(async () => {
+    emitirTextoDaPrevia(2, "Voltou a falar");
+  });
+  expect(screen.getByText("Voltou a falar")).toBeInTheDocument();
+});
+
+test("erro na janela aberta derruba só a Prévia; o microfone continua", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  await act(async () => {
+    emitirTextoDaPrevia(1, "Começou a falar");
+  });
+  expect(screen.getByText("Começou a falar")).toBeInTheDocument();
+  await act(async () => {
+    emitirErroDaPrevia(1, "Siri and Dictation are disabled");
+  });
+
+  expect(screen.queryByText("Começou a falar")).not.toBeInTheDocument();
+  expect(previaEstaAtiva()).toBe(false);
+  expect(
+    screen.getByText("Prévia indisponível — veja o guia de operação."),
+  ).toBeInTheDocument();
+  expect(capturaEstaAtiva()).toBe(true);
+  expect(
+    screen.getByRole("button", { name: "Desligar microfone" }),
+  ).toBeInTheDocument();
+
+  // Sem Prévia, o áudio deixa de ser enviado a ela, mas o Whisper segue.
+  programarComando("transcrever_audio", "Continua transcrevendo.");
+  await captar(12, 0.25);
+  await captar(1, 0);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue(
+    "Continua transcrevendo.",
+  );
+});
+
+test("erro numa janela já fechada é o fim natural dela e não derruba a Prévia", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  // A janela 1 fecha com o trecho e a 2 abre; o reconhecedor encerra a 1
+  // avisando que não há mais fala nela.
+  programarComando("transcrever_audio", "Primeiro trecho.");
+  await captar(12, 0.25);
+  await captar(1, 0);
+  await act(async () => {
+    emitirErroDaPrevia(1, "No speech detected");
+    emitirTextoDaPrevia(2, "Já na segunda janela");
+  });
+
+  expect(previaEstaAtiva()).toBe(true);
+  expect(screen.getByText("Já na segunda janela")).toBeInTheDocument();
+  expect(
+    screen.queryByText("Prévia indisponível — veja o guia de operação."),
+  ).not.toBeInTheDocument();
+});
+
+test("desligar o microfone mantém a Prévia congelada até a última Transcrição entrar", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  await captar(1, 0.25);
+  await act(async () => {
+    emitirTextoDaPrevia(1, "Última frase");
+  });
+  // O Whisper falso só responde depois de liberado: enquanto isso, a Prévia
+  // continua na tela, congelada.
+  let responder: (texto: string) => void = () => {};
+  programarComando(
+    "transcrever_audio",
+    new Promise<string>((resolve) => {
+      responder = resolve;
+    }),
+  );
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Desligar microfone" }),
+  );
+  await act(async () => {});
+  expect(previaEstaAtiva()).toBe(false);
+  expect(screen.getByText("Última frase")).toBeInTheDocument();
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("");
+
+  await act(async () => {
+    responder("Última frase.");
+  });
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("Última frase.");
+  expect(screen.queryByText("Última frase")).not.toBeInTheDocument();
+});
+
+test("Finalizar Consulta com Prévia na tela: ela some quando a Transcrição pendente entra", async () => {
+  const terapeuta = terapeutaComTimersFalsos();
+  carregarConsulta();
+  await renderizarPagina();
+  await ligarMicrofone(terapeuta);
+
+  await captar(1, 0.25);
+  await act(async () => {
+    emitirTextoDaPrevia(1, "Frase final");
+  });
+  programarComando("transcrever_audio", "Frase final.");
+  await terapeuta.click(
+    screen.getByRole("button", { name: "Finalizar Consulta" }),
+  );
+  await passar(0);
+
+  expect(previaEstaAtiva()).toBe(false);
+  expect(screen.getByLabelText("Conteúdo")).toHaveValue("Frase final.");
+  expect(screen.queryByText("Frase final")).not.toBeInTheDocument();
 });
 
 test("desligar o microfone transcreve a fala que ainda não fechou trecho", async () => {

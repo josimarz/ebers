@@ -61,10 +61,20 @@ function ehSilencio(bloco: Float32Array): boolean {
 }
 
 /**
+ * Fim de uma janela do acumulador: o trecho a transcrever, ou nulo quando
+ * ninguém falou nela. A janela vazia ainda é sinalizada porque a Prévia
+ * (ADR-0007) recomeça o reconhecedor a cada janela — um request nunca vive
+ * além de um trecho, com fala ou sem.
+ */
+export interface JanelaFechada {
+  trecho: Float32Array | null;
+}
+
+/**
  * Junta os blocos captados do microfone em trechos prontos para transcrever.
  * Blocos entram na taxa nativa da captura; o trecho emitido já sai na taxa do
- * Whisper. Janelas onde ninguém falou são descartadas — silêncio transcrito é
- * alucinação do Whisper.
+ * Whisper. Janelas onde ninguém falou fecham sem trecho — silêncio
+ * transcrito é alucinação do Whisper.
  */
 export class AcumuladorDeAudio {
   private blocos: Float32Array[] = [];
@@ -74,8 +84,8 @@ export class AcumuladorDeAudio {
 
   constructor(private readonly taxaOrigem: number) {}
 
-  /** Recebe um bloco captado; devolve o trecho a transcrever, se completou um. */
-  registrar(bloco: Float32Array): Float32Array | null {
+  /** Recebe um bloco captado; devolve a janela fechada, se este bloco a fechou. */
+  registrar(bloco: Float32Array): JanelaFechada | null {
     this.blocos.push(bloco.slice());
     this.totalAmostras += bloco.length;
     if (ehSilencio(bloco)) {
@@ -89,7 +99,7 @@ export class AcumuladorDeAudio {
       this.silencioFinalAmostras >= PAUSA_PARA_FECHAR_S * this.taxaOrigem;
     const estourouMaximo =
       this.totalAmostras >= TRECHO_MAXIMO_S * this.taxaOrigem;
-    return pausaFechou || estourouMaximo ? this.cortar() : null;
+    return pausaFechou || estourouMaximo ? { trecho: this.cortar() } : null;
   }
 
   /** O que restou ao desligar o microfone (nulo se ninguém falou). */

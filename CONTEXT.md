@@ -43,12 +43,20 @@ Consulta concluída. Conteúdo e Notas continuam editáveis; o pagamento ainda p
 Consulta interrompida ou não realizada, preservada para histórico. Somente leitura, fora de todas as contagens financeiras; devolve o Crédito que houver consumido.
 
 **Conteúdo**:
-O relato do paciente numa Consulta (texto plano; recebe a transcrição de voz).
+O relato do paciente numa Consulta (texto plano; recebe a Transcrição).
 _Evitar_: transcrição, relato
 
 **Notas**:
 As anotações da Terapeuta numa Consulta (texto rico).
 _Evitar_: observações, prontuário
+
+**Transcrição**:
+O texto que o microfone insere no Conteúdo. Definitiva ao entrar: só a Terapeuta a altera depois, editando o Conteúdo.
+_Evitar_: texto confirmado, texto final, trecho
+
+**Prévia**:
+O que o microfone está ouvindo agora, em texto provisório: aparece em segundos, pode mudar e nunca é salva; some quando a Transcrição correspondente entra no Conteúdo.
+_Evitar_: texto provisório, parcial, resultado intermediário, interim
 
 **Valor da consulta**:
 O preço atual acordado entre Terapeuta e Paciente; vive no cadastro do Paciente.

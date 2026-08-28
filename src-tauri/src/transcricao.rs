@@ -64,6 +64,16 @@ pub fn amostras_do_corpo(bytes: &[u8]) -> Result<Vec<f32>, String> {
         .collect())
 }
 
+/// Decodifica as amostras f32 LE mandadas como corpo bruto de um invoke.
+pub fn amostras_da_requisicao(
+    requisicao: &tauri::ipc::Request<'_>,
+) -> Result<Vec<f32>, String> {
+    let tauri::ipc::InvokeBody::Raw(dados) = requisicao.body() else {
+        return Err("Esperava as amostras de áudio no corpo da chamada".into());
+    };
+    amostras_do_corpo(dados)
+}
+
 /// Preenche com silêncio até a duração mínima que o whisper.cpp aceita
 /// (ele rejeita áudio com menos de ~1 s).
 pub fn com_duracao_minima(mut amostras: Vec<f32>) -> Vec<f32> {
