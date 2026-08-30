@@ -1,0 +1,31 @@
+#!/bin/bash
+# Shim do hdiutil usado só pela task `mise run build:macos` (via PATH).
+#
+# Por quê: o bundle_dmg.sh que o Tauri embute (fork do create-dmg) desmonta o
+# volume logo depois do AppleScript do Finder, e nesse instante o macOS ainda
+# segura o volume ("Recurso ocupado"). O script só re-tenta quando o hdiutil
+# sai com código 16 (EBUSY clássico), mas no macOS 26 (Tahoe) o hdiutil foi
+# reescrito e devolve 2 — o build inteiro aborta na primeira tentativa.
+# O create-dmg upstream já corrigiu detectando "Resource busy" no texto, o que
+# aqui também falharia: a mensagem vem localizada em pt-BR.
+#
+# Este shim intercepta apenas `hdiutil detach`: re-tenta com espera crescente
+# e, em último caso, desmonta com -force (inofensivo aqui — o conteúdo do DMG
+# já foi todo escrito; quem segura o volume são leitores do sistema, como o
+# Spotlight). Qualquer outro subcomando é delegado intacto ao hdiutil real.
+# Pode ser removido quando o Tauri atualizar o fork do create-dmg.
+
+REAL=/usr/bin/hdiutil
+
+if [[ "$1" != "detach" ]]; then
+  exec "$REAL" "$@"
+fi
+
+for tentativa in 1 2 3 4 5; do
+  "$REAL" "$@" && exit 0
+  echo "hdiutil-shim: detach falhou (tentativa $tentativa/5), aguardando $((2 * tentativa))s..." >&2
+  sleep $((2 * tentativa))
+done
+
+echo "hdiutil-shim: desmontando com -force..." >&2
+exec "$REAL" "$@" -force
