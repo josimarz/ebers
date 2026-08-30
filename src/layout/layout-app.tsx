@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { BotaoAutoCadastro } from "@/components/botao-auto-cadastro";
 import { MarcaEbers } from "@/components/marca-ebers";
 import { PanoDeFundo } from "@/components/pano-de-fundo";
 import {
@@ -133,6 +134,11 @@ export function LayoutApp() {
                 )}
               </BreadcrumbList>
             </Breadcrumb>
+            {/* Ação global da moldura: o QR code do Auto-cadastro, ao alcance
+                em qualquer tela (issue #21). */}
+            <div className="ml-auto">
+              <BotaoAutoCadastro />
+            </div>
           </header>
 
           <main className="flex-1 px-6 py-6">

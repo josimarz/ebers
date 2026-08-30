@@ -35,6 +35,10 @@ test("sem window.__TAURI__, qualquer caminho cai no Auto-cadastro, sem menu", ()
   ).toBeInTheDocument();
   expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  // O QR code é ferramenta da Terapeuta: só existe no cabeçalho do desktop.
+  expect(
+    screen.queryByRole("button", { name: "Auto-cadastro" }),
+  ).not.toBeInTheDocument();
 });
 
 test("no app desktop, /consultas/:id cai na página da consulta", async () => {

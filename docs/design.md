@@ -123,6 +123,12 @@ de modal (`tw-animate-css`), o ponto pulsante do microfone gravando. Sob
   penúltimo; o último é `BreadcrumbPage`).
 - Um único `<main>` na página (o `SidebarInset` é `div`).
 - Rodapé em `text-xs text-muted-foreground`, sem borda.
+- Ação global do cabeçalho (`BotaoAutoCadastro`): à direita (`ml-auto`),
+  `Button outline size="sm"` com ícone `QrCode` e o rótulo "Auto-cadastro" —
+  abre a modal do QR code do Auto-cadastro. É a única ação da moldura; ações
+  de página ficam no `CabecalhoPagina`. Não use botão flutuante para isso:
+  ele cobriria a barra "Salvar" grudada dos formulários e a paginação das
+  tabelas.
 
 ### 3.2 Cabeçalho de página (`CabecalhoPagina`)
 
@@ -197,6 +203,13 @@ são um par (o painel desfoca o véu): mexer no alfa de um muda o outro. A lista
 do filtro é `glass-frosted rounded-xl p-1` com opções `rounded-lg` e estados
 hover/focus/`aria-selected` em `bg-accent`.
 
+A modal do QR code (`ModalAutoCadastro`, `sm:max-w-md`) é a única exceção à
+regra dos tokens: o QR é preto sobre branco dentro do próprio SVG, com zona de
+silêncio de 2 módulos — exigência da leitura pela câmera, não uma superfície
+do tema. Em volta dele, `rounded-xl border-glass-border`; o endereço por
+extenso vai em `font-mono text-sm text-muted-foreground`; os erros usam
+`AvisoErro` seguido de um `Button outline` "Tentar de novo".
+
 ### 3.9 Painéis da Consulta (`PainelConsulta`)
 
 Conteúdo e Notas são dois cartões iguais: cabeçalho (título = `<label>` do
@@ -267,6 +280,8 @@ Conciso, confiante, claro e cordial — na linguagem de `CONTEXT.md`
   `tabIndex`.
 - Duas metáforas ao mesmo tempo (cartão chapado com sombra dura ao lado de
   vidro).
+- Botão flutuante no canto da tela: cobre a barra "Salvar" grudada e a
+  paginação; ação global vai ao cabeçalho (§3.1).
 
 ## 7. Checklist de QA (revisão de código)
 

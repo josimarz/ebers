@@ -129,6 +129,14 @@ Página responsiva para cadastro e edição de pacientes.
 - **Após o envio**: tela de confirmação ("Cadastro recebido!") e retorno ao formulário em branco, pronto para o próximo paciente.
 - O Auto-cadastro **só cria** pacientes — nunca edita um cadastro existente.
 
+**Chegar ao Modo tablet — QR code (no Modo desktop):**
+
+- O cabeçalho do Modo desktop tem, em toda tela, o botão **"Auto-cadastro"** (ícone de QR code) na extremidade direita. Ele abre a modal **"Auto-cadastro no tablet"**.
+- A modal mostra o **QR code** do endereço do servidor local (`http://<IP-do-computador>:8738`), o mesmo endereço por extenso (para digitar, se preciso) e os passos: o tablet precisa estar no Wi-Fi do consultório; tocar no link que a câmera mostra; salvar a página nos favoritos — o endereço vale enquanto o Ebers estiver aberto e, se o favorito parar de abrir, basta ler o código de novo.
+- Quando o computador tem mais de um endereço (Wi-Fi e cabo, VPN, compartilhamento de internet), o sistema **escolhe sozinho**: um endereço da rede local, de preferência o pelo qual o computador sai para a rede. **Nunca há escolha de rede na tela.**
+- O endereço é consultado a cada abertura da modal. Se o servidor não subiu (porta ocupada), a modal avisa *"O Auto-cadastro não está no ar. Feche e abra o Ebers de novo."*; se o computador não está em nenhuma rede local, *"Este computador não está conectado a nenhuma rede. Conecte-o ao Wi-Fi do consultório."* — ambos com o botão "Tentar de novo".
+- O QR code aponta para o endereço fixo, sem código de uso único: quem chega por ele cai no Modo tablet como qualquer navegador da rede ([ADR-0003](./adr/0003-rede-local-sem-autenticacao.md)).
+
 **Modo desktop (terapeuta):**
 
 - Todos os campos e funcionalidades estão disponíveis.
@@ -320,7 +328,7 @@ Cada movimento registra data/hora, tipo, quantidade e referência/motivo.
 ### 4.1 Estrutura do layout
 
 - **Sidebar** (menu lateral à esquerda)
-- **Cabeçalho**: breadcrumb
+- **Cabeçalho**: breadcrumb e, à direita, o botão "Auto-cadastro" (QR code para o tablet — seção 1.3)
 - **Corpo**: título da página + conteúdo
 - **Rodapé**
 
@@ -365,6 +373,7 @@ O app desktop embute um **servidor HTTP local** (sugestão: Axum, no backend Rus
 - O servidor expõe **rotas REST** equivalentes aos Tauri Commands apenas para os fluxos usados no Auto-cadastro, já que `invoke()` não está disponível fora do webview Tauri. A lógica de negócio pode ser duplicada entre o Command e a rota HTTP quando necessário.
 - **Sem autenticação** — ver [ADR-0003](./adr/0003-rede-local-sem-autenticacao.md).
 - O frontend detecta o contexto de execução via `window.__TAURI__` (presente = app desktop; ausente = navegador externo) para decidir se aplica o modo tablet — mesma SPA, sem bundle separado. Consequência aceita: **qualquer** navegador externo (inclusive o celular da terapeuta) cai no modo tablet.
+- O app descobre o próprio endereço IPv4 na rede local (comando Tauri `endereco_auto_cadastro`, backend Rust) e o expõe como QR code na modal do cabeçalho (seção 1.3). O servidor abre a porta de forma síncrona na inicialização, então o app sabe desde o início se o Auto-cadastro está no ar — é o que permite à modal avisar quando não está.
 
 ### 5.2 Banco de dados
 
