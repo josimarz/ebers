@@ -1,7 +1,10 @@
-import { NavLink, Outlet, useLocation } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { MarcaEbers } from "@/components/marca-ebers";
+import { PanoDeFundo } from "@/components/pano-de-fundo";
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -10,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -21,36 +25,50 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { secoes } from "@/rotas";
+import { type Secao, secoes } from "@/rotas";
 
-function tituloDaSecaoAtual(caminho: string): string {
-  const secao = secoes.find((s) => caminho.startsWith(s.caminho));
-  return secao?.titulo ?? "Início";
+/** Páginas abaixo das seções, para a trilha do cabeçalho. */
+const SUBPAGINAS: [RegExp, string][] = [
+  [/^\/pacientes\/novo$/, "Novo Paciente"],
+  [/^\/pacientes\/\d+\/editar$/, "Editar Paciente"],
+  [/^\/consultas\/\d+$/, "Consulta"],
+];
+
+interface Trilha {
+  secao: Secao | undefined;
+  subpagina: string | undefined;
 }
 
+function trilhaDoCaminho(caminho: string): Trilha {
+  return {
+    secao: secoes.find((secao) => caminho.startsWith(secao.caminho)),
+    subpagina: SUBPAGINAS.find(([padrao]) => padrao.test(caminho))?.[1],
+  };
+}
+
+/**
+ * Moldura do Modo desktop (docs/design.md): menu lateral e cabeçalho são
+ * cartões de vidro fosco flutuando sobre o pano de fundo; o conteúdo vive
+ * abaixo do cabeçalho, em cartões de vidro leve.
+ */
 export function LayoutApp() {
   const { pathname } = useLocation();
+  const { secao, subpagina } = trilhaDoCaminho(pathname);
 
   return (
     <TooltipProvider>
       <SidebarProvider>
-        {/* Pano de fundo com o gradiente do tema, sobre o qual o vidro é desenhado */}
-        <div
-          aria-hidden
-          className="fixed inset-0 -z-10 opacity-20 [background:var(--gradient)]"
-        />
+        <PanoDeFundo />
 
-        <Sidebar collapsible="icon">
-          <SidebarHeader>
-            <span className="px-2 py-1 font-heading text-lg font-semibold group-data-[collapsible=icon]:hidden">
-              Ebers
-            </span>
+        <Sidebar collapsible="icon" variant="floating">
+          <SidebarHeader className="p-3">
+            <MarcaEbers classeDoNome="group-data-[collapsible=icon]:hidden" />
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
               <SidebarGroupContent>
                 <nav aria-label="Menu principal">
-                  <SidebarMenu>
+                  <SidebarMenu className="gap-1">
                     {secoes.map((secao) => (
                       <SidebarMenuItem key={secao.caminho}>
                         <SidebarMenuButton
@@ -70,30 +88,58 @@ export function LayoutApp() {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
+          <SidebarFooter className="p-3 group-data-[collapsible=icon]:hidden">
+            <p className="text-xs text-muted-foreground">
+              <kbd className="rounded-md border border-border bg-glass-fill px-1.5 py-0.5 font-mono text-[11px]">
+                ⌘B
+              </kbd>{" "}
+              recolhe o menu
+            </p>
+          </SidebarFooter>
         </Sidebar>
 
         <SidebarInset>
-          <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
+          <header className="glass-frosted sticky top-2 z-20 mx-2 mt-2 flex h-12 shrink-0 items-center gap-2 rounded-2xl px-3">
+            <SidebarTrigger />
+            <Separator orientation="vertical" className="mx-1 h-4" />
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem>Ebers</BreadcrumbItem>
-                <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>
-                    {tituloDaSecaoAtual(pathname)}
-                  </BreadcrumbPage>
+                  <BreadcrumbLink asChild>
+                    <Link to="/pacientes">Ebers</Link>
+                  </BreadcrumbLink>
                 </BreadcrumbItem>
+                {secao && (
+                  <>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem>
+                      {subpagina ? (
+                        <BreadcrumbLink asChild>
+                          <Link to={secao.caminho}>{secao.titulo}</Link>
+                        </BreadcrumbLink>
+                      ) : (
+                        <BreadcrumbPage>{secao.titulo}</BreadcrumbPage>
+                      )}
+                    </BreadcrumbItem>
+                  </>
+                )}
+                {subpagina && (
+                  <>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>{subpagina}</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </>
+                )}
               </BreadcrumbList>
             </Breadcrumb>
           </header>
 
-          <main className="flex-1 p-6">
+          <main className="flex-1 px-6 py-6">
             <Outlet />
           </main>
 
-          <footer className="border-t px-6 py-3 text-sm text-muted-foreground">
+          <footer className="px-6 pt-2 pb-4 text-xs text-muted-foreground">
             Ebers — gerenciamento do consultório
           </footer>
         </SidebarInset>

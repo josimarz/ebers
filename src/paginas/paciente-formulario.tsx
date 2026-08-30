@@ -1,5 +1,8 @@
+import { CircleCheck, ImagePlus } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { AvisoErro } from "@/components/aviso";
+import { CabecalhoPagina } from "@/components/cabecalho-pagina";
 import { FotoPaciente } from "@/components/foto-paciente";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,8 +220,14 @@ export function PaginaFormularioPaciente({
 
   if (cadastroRecebido) {
     return (
-      <section className="glass-bg flex max-w-3xl flex-col items-center gap-4 rounded-xl p-10 text-center">
-        <h2 className="font-heading text-2xl font-semibold">
+      <section className="glass-bg flex max-w-3xl flex-col items-center gap-4 rounded-2xl p-10 text-center">
+        <span
+          aria-hidden="true"
+          className="flex size-14 items-center justify-center rounded-full bg-success-subtle text-success"
+        >
+          <CircleCheck className="size-7" />
+        </span>
+        <h2 className="font-heading text-2xl font-bold tracking-tight">
           Cadastro recebido!
         </h2>
         <p className="text-muted-foreground">
@@ -232,13 +241,13 @@ export function PaginaFormularioPaciente({
   }
 
   if (carga === "carregando") {
-    return <p className="text-muted-foreground">Carregando paciente…</p>;
+    return (
+      <p className="text-sm text-muted-foreground">Carregando paciente…</p>
+    );
   }
 
   if (carga === "erro") {
-    return (
-      <p className="text-destructive">Não foi possível carregar o paciente.</p>
-    );
+    return <AvisoErro>Não foi possível carregar o paciente.</AvisoErro>;
   }
 
   const campoTexto = (
@@ -281,20 +290,18 @@ export function PaginaFormularioPaciente({
 
   return (
     <section className="flex max-w-3xl flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-heading text-2xl font-semibold">
-          {tablet
+      <CabecalhoPagina
+        titulo={
+          tablet
             ? "Auto-cadastro"
             : editando
               ? "Editar Paciente"
-              : "Novo Paciente"}
-        </h1>
-        {tablet && (
-          <p className="text-muted-foreground">
-            Preencha seus dados e toque em Enviar ao final.
-          </p>
-        )}
-      </header>
+              : "Novo Paciente"
+        }
+        descricao={
+          tablet ? "Preencha seus dados e toque em Enviar ao final." : undefined
+        }
+      />
 
       <form
         noValidate
@@ -309,12 +316,12 @@ export function PaginaFormularioPaciente({
         }
       >
         <SecaoFormulario titulo="Dados pessoais">
-          <div className="flex items-center gap-4 md:col-span-2">
+          <div className="flex items-center gap-5 md:col-span-2">
             {foto.tipo === "nova" ? (
               <img
                 src={foto.previa}
                 alt="Prévia da foto de perfil"
-                className="size-20 rounded-full object-cover"
+                className="size-20 rounded-full object-cover ring-1 ring-glass-border"
               />
             ) : (
               <FotoPaciente
@@ -327,11 +334,12 @@ export function PaginaFormularioPaciente({
               <span className="text-sm font-medium">Foto de perfil</span>
               <div className="flex items-center gap-2">
                 <label
-                  className={buttonVariants({
-                    variant: "outline",
-                    size: "sm",
-                  })}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "cursor-pointer",
+                  )}
                 >
+                  <ImagePlus aria-hidden="true" />
                   {foto.tipo === "sem-foto" ? "Anexar foto" : "Trocar foto"}
                   <input
                     type="file"
@@ -353,6 +361,9 @@ export function PaginaFormularioPaciente({
                   </Button>
                 )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                JPEG, PNG ou WebP.
+              </p>
             </div>
           </div>
           {campoTexto("nomeCompleto", "Nome completo", { obrigatorio: true })}
@@ -469,7 +480,9 @@ export function PaginaFormularioPaciente({
           </SecaoFormulario>
         )}
 
-        <div className="flex items-center gap-3">
+        {/* Barra de ações grudada ao fim da janela: Salvar sempre ao alcance
+            num formulário longo. */}
+        <div className="glass-frosted sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3">
           <Button type="submit" disabled={salvando}>
             {salvando ? rotulosEnvio.executando : rotulosEnvio.botao}
           </Button>
@@ -500,9 +513,11 @@ function SecaoFormulario({
   children: React.ReactNode;
 }) {
   return (
-    <section className="glass-bg flex flex-col gap-4 rounded-xl p-6">
+    <section className="glass-bg flex flex-col gap-5 rounded-2xl p-6">
       <header className="flex flex-col gap-1">
-        <h2 className="font-heading text-lg font-semibold">{titulo}</h2>
+        <h2 className="font-heading text-lg font-semibold tracking-tight">
+          {titulo}
+        </h2>
         {descricao && (
           <p className="text-sm text-muted-foreground">{descricao}</p>
         )}

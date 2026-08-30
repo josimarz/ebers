@@ -6,11 +6,12 @@ Sistema de gerenciamento de pacientes e consultas para o consultório de psicolo
 - Glossário do domínio: [`CONTEXT.md`](CONTEXT.md)
 - Decisões de arquitetura: [`docs/adr/`](docs/adr/)
 - Operação (backup manual): [`docs/operacao.md`](docs/operacao.md)
+- Sistema de design (tokens, componentes, acessibilidade): [`docs/design.md`](docs/design.md)
 - Pesquisas que embasam decisões: [`docs/pesquisa/`](docs/pesquisa/)
 
 ## Stack
 
-Tauri 2 (backend Rust) · React 19 + TypeScript + Vite (frontend) · SQLite via `tauri-plugin-sql` + Drizzle ORM (modo sqlite-proxy) · Tailwind CSS 4 com o tema padrão do [Glass UI](https://glass-ui.crenspire.com/) · Biome · Vitest + Testing Library · mise
+Tauri 2 (backend Rust) · React 19 + TypeScript + Vite (frontend) · SQLite via `tauri-plugin-sql` + Drizzle ORM (modo sqlite-proxy) · Tailwind CSS 4 com o sistema de design do Ebers — glassmorphism sobre o esqueleto do [Glass UI](https://glass-ui.crenspire.com/), guia em [`docs/design.md`](docs/design.md) · Biome · Vitest + Testing Library · mise
 
 ## Desenvolvimento
 

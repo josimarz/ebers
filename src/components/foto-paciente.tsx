@@ -40,7 +40,7 @@ export function FotoPaciente({ arquivo, nome, className }: PropsFotoPaciente) {
       <span
         aria-hidden="true"
         className={cn(
-          "flex items-center justify-center rounded-full bg-muted text-muted-foreground",
+          "flex items-center justify-center rounded-full bg-accent text-accent-foreground ring-1 ring-glass-border",
           className,
         )}
       >
@@ -53,7 +53,10 @@ export function FotoPaciente({ arquivo, nome, className }: PropsFotoPaciente) {
     <img
       src={src}
       alt={`Foto de ${nome}`}
-      className={cn("rounded-full object-cover", className)}
+      className={cn(
+        "rounded-full object-cover ring-1 ring-glass-border",
+        className,
+      )}
     />
   );
 }

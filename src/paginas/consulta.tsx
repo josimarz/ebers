@@ -1,9 +1,12 @@
 import { Mic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
+import { AvisoErro } from "@/components/aviso";
 import { BotaoMicrofone } from "@/components/botao-microfone";
 import { EditorNotas } from "@/components/editor-notas";
 import { FotoPaciente } from "@/components/foto-paciente";
+import { PainelConsulta } from "@/components/painel-consulta";
+import { StatusConsulta } from "@/components/status-consulta";
 import { Button } from "@/components/ui/button";
 import {
   buscarConsulta,
@@ -117,15 +120,17 @@ export function PaginaConsulta() {
     );
 
   if (carga.estado === "carregando") {
-    return <p className="text-muted-foreground">Carregando consulta…</p>;
+    return (
+      <p className="text-sm text-muted-foreground">Carregando consulta…</p>
+    );
   }
   if (carga.estado === "nao-encontrada") {
-    return <p className="text-muted-foreground">Consulta não encontrada.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">Consulta não encontrada.</p>
+    );
   }
   if (carga.estado === "erro") {
-    return (
-      <p className="text-destructive">Não foi possível carregar a consulta.</p>
-    );
+    return <AvisoErro>Não foi possível carregar a consulta.</AvisoErro>;
   }
 
   const { consulta, paciente } = carga;
@@ -135,27 +140,25 @@ export function PaginaConsulta() {
 
   return (
     <section className="flex flex-col gap-6">
-      <header className="glass-bg flex items-center gap-4 rounded-xl px-6 py-4">
+      <header className="glass-bg flex flex-wrap items-center gap-5 rounded-2xl px-6 py-5">
         <FotoPaciente
           arquivo={paciente.foto}
           nome={paciente.nomeCompleto}
           className="size-14"
         />
-        <div>
-          <h1 className="font-heading text-2xl font-semibold">
+        <div className="min-w-0">
+          <h1 className="truncate font-heading text-2xl font-bold tracking-tight">
             {paciente.nomeCompleto}
           </h1>
           <p className="text-sm text-muted-foreground">
             {calcularIdade(paciente.dataNascimento, hojeIso())} anos
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-4">
+        <div className="ml-auto flex flex-wrap items-center gap-3">
           {consulta.status === "Aberta" ? (
             <TimerConsulta iniciadoEm={consulta.iniciadoEm} />
           ) : (
-            <p className="rounded-full border px-3 py-1 text-sm">
-              {consulta.status}
-            </p>
+            <StatusConsulta status={consulta.status} className="mr-1" />
           )}
           {acoes.cancelar && (
             <Button variant="destructive" onClick={cancelar}>
@@ -178,7 +181,7 @@ export function PaginaConsulta() {
         </div>
       </header>
 
-      {erroDaAcao !== null && <p className="text-destructive">{erroDaAcao}</p>}
+      {erroDaAcao !== null && <AvisoErro>{erroDaAcao}</AvisoErro>}
 
       <div className="grid gap-6 md:grid-cols-2">
         <CampoDaConsulta
@@ -200,9 +203,10 @@ export function PaginaConsulta() {
   );
 }
 
+/** Cor do timer por faixa (spec 2.3): tokens de estado, não de gráfico. */
 const CLASSES_DO_TIMER = {
-  verde: "text-chart-2",
-  amarela: "text-chart-3",
+  verde: "text-success",
+  amarela: "text-warning",
   vermelha: "text-destructive",
 } as const;
 
@@ -225,7 +229,7 @@ function TimerConsulta({ iniciadoEm }: { iniciadoEm: string }) {
       role="timer"
       aria-label="Timer da consulta"
       className={cn(
-        "font-mono text-2xl font-semibold tabular-nums",
+        "rounded-xl border border-glass-border bg-glass-fill px-3 py-1 font-mono text-2xl font-semibold tabular-nums",
         CLASSES_DO_TIMER[timer.cor],
       )}
     >
@@ -270,37 +274,35 @@ function CampoDaConsulta({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <label htmlFor={id} className="font-medium">
-            {rotulo}
-          </label>
-          <p className="text-sm text-muted-foreground">{descricao}</p>
-        </div>
-        {comMicrofone && (
+    <PainelConsulta
+      titulo={<label htmlFor={id}>{rotulo}</label>}
+      descricao={descricao}
+      desabilitado={desabilitado}
+      acao={
+        comMicrofone && (
           <BotaoMicrofone
             aoTranscrever={(texto) =>
               alterar(anexarTranscricao(valorRef.current, texto))
             }
             aoMudarPrevia={setPrevia}
           />
-        )}
-      </div>
+        )
+      }
+    >
       <textarea
         id={id}
         value={valor}
         disabled={desabilitado}
         onChange={(evento) => alterar(evento.target.value)}
-        className="glass-bg min-h-64 flex-1 resize-y rounded-xl p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
+        className="min-h-64 flex-1 resize-y bg-transparent p-4 outline-none disabled:cursor-not-allowed disabled:text-muted-foreground"
       />
       {previa !== "" && (
-        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+        <p className="flex items-start gap-2 border-t border-border/60 px-4 py-3 text-sm text-muted-foreground">
           <Mic className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span className="sr-only">Prévia:</span>
           <span>{previa}</span>
         </p>
       )}
-    </div>
+    </PainelConsulta>
   );
 }

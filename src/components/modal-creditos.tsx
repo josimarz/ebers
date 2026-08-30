@@ -1,3 +1,4 @@
+import { Coins } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -168,7 +169,7 @@ export function ModalCreditos({
             <SaldoAtual saldo={saldoDoExtrato(carga.movimentos)} />
 
             <form onSubmit={vender} className="flex flex-col gap-2">
-              <p className="font-medium">Vender</p>
+              <h3 className="text-sm font-semibold">Vender</h3>
               <div className="flex items-end gap-3">
                 <div className="flex flex-col gap-1">
                   <label
@@ -213,7 +214,7 @@ export function ModalCreditos({
             </form>
 
             <form onSubmit={ajustar} className="flex flex-col gap-2">
-              <p className="font-medium">Ajustar</p>
+              <h3 className="text-sm font-semibold">Ajustar</h3>
               <div className="flex items-end gap-3">
                 <div className="flex flex-col gap-1">
                   <label
@@ -265,11 +266,21 @@ export function ModalCreditos({
 
 function SaldoAtual({ saldo }: { saldo: number }) {
   return (
-    <div>
-      <p className="text-sm text-muted-foreground">Saldo atual</p>
-      <p className="font-heading text-3xl font-semibold">
-        {saldo} {saldo === 1 ? "crédito" : "créditos"}
-      </p>
+    <div className="flex items-center gap-4 rounded-xl border border-glass-border bg-glass-fill px-4 py-3">
+      <span
+        aria-hidden="true"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"
+      >
+        <Coins className="size-5" />
+      </span>
+      <div>
+        <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Saldo atual
+        </p>
+        <p className="font-heading text-2xl font-bold tabular-nums">
+          {saldo} {saldo === 1 ? "crédito" : "créditos"}
+        </p>
+      </div>
     </div>
   );
 }
@@ -285,7 +296,7 @@ function Extrato({ movimentos }: { movimentos: MovimentoDoExtrato[] }) {
   }
 
   return (
-    <div className="max-h-72 overflow-y-auto rounded-lg border">
+    <div className="max-h-72 overflow-y-auto rounded-xl border border-border/70 bg-glass-fill">
       <Table>
         <TableHeader>
           <TableRow>

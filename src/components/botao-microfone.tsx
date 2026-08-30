@@ -291,6 +291,13 @@ export function BotaoMicrofone({
       >
         {gravando ? <MicOff /> : <Mic />}
         {gravando ? "Desligar microfone" : "Ligar microfone"}
+        {/* Ponto pulsante: estado vivo (gravando), não decoração. */}
+        {gravando && (
+          <span
+            aria-hidden="true"
+            className="size-2 animate-pulse rounded-full bg-destructive"
+          />
+        )}
       </Button>
       {aviso !== null && <p className="text-sm text-destructive">{aviso}</p>}
       {avisoDePrevia !== null && (

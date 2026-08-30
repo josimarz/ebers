@@ -1,8 +1,12 @@
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, NotebookPen, SearchX } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { AvisoErro } from "@/components/aviso";
+import { CabecalhoPagina } from "@/components/cabecalho-pagina";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { FiltroPaciente } from "@/components/filtro-paciente";
 import { FotoPaciente } from "@/components/foto-paciente";
+import { StatusConsulta } from "@/components/status-consulta";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -77,26 +81,26 @@ export function PaginaConsultas() {
 
   return (
     <section className="flex flex-col gap-6">
-      <h1 className="font-heading text-2xl font-semibold">Consultas</h1>
+      <CabecalhoPagina
+        titulo="Consultas"
+        descricao="Todas as Consultas registradas, com filtro por paciente."
+      />
 
       {carga.estado === "carregando" && (
-        <p className="text-muted-foreground">Carregando consultas…</p>
+        <p className="text-sm text-muted-foreground">Carregando consultas…</p>
       )}
 
       {carga.estado === "erro" && (
-        <p className="text-destructive">
-          Não foi possível carregar as consultas.
-        </p>
+        <AvisoErro>Não foi possível carregar as consultas.</AvisoErro>
       )}
 
       {carga.estado === "pronto" &&
         (carga.consultas.length === 0 ? (
-          <div className="glass-bg flex flex-col items-center gap-1 rounded-xl px-6 py-12 text-center">
-            <p className="font-medium">Nenhuma consulta registrada</p>
-            <p className="text-sm text-muted-foreground">
-              As consultas criadas aparecerão aqui.
-            </p>
-          </div>
+          <EstadoVazio
+            icone={NotebookPen}
+            titulo="Nenhuma consulta registrada"
+            descricao="As consultas criadas aparecerão aqui."
+          />
         ) : (
           <TabelaDeConsultas
             consultas={carga.consultas}
@@ -148,15 +152,14 @@ function TabelaDeConsultas({
       />
 
       {itens.length === 0 ? (
-        <div className="glass-bg flex flex-col items-center gap-1 rounded-xl px-6 py-12 text-center">
-          <p className="font-medium">Nenhuma consulta encontrada</p>
-          <p className="text-sm text-muted-foreground">
-            O paciente selecionado não tem consultas registradas.
-          </p>
-        </div>
+        <EstadoVazio
+          icone={SearchX}
+          titulo="Nenhuma consulta encontrada"
+          descricao="O paciente selecionado não tem consultas registradas."
+        />
       ) : (
         <>
-          <div className="glass-bg overflow-hidden rounded-xl">
+          <div className="glass-bg overflow-hidden rounded-2xl">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -188,7 +191,7 @@ function TabelaDeConsultas({
                       }}
                       className="cursor-pointer"
                     >
-                      <TableCell>
+                      <TableCell className="w-14 pr-0">
                         {paciente && (
                           <FotoPaciente
                             arquivo={paciente.foto}
@@ -197,15 +200,27 @@ function TabelaDeConsultas({
                           />
                         )}
                       </TableCell>
-                      <TableCell>{formatarData(consulta.iniciadoEm)}</TableCell>
+                      <TableCell className="font-medium">
+                        {formatarData(consulta.iniciadoEm)}
+                      </TableCell>
                       <TableCell>{formatarHora(consulta.iniciadoEm)}</TableCell>
                       <TableCell>
-                        {consulta.finalizadoEm === null
-                          ? "—"
-                          : formatarHora(consulta.finalizadoEm)}
+                        {consulta.finalizadoEm === null ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          formatarHora(consulta.finalizadoEm)
+                        )}
                       </TableCell>
-                      <TableCell>{consulta.status}</TableCell>
-                      <TableCell>{consulta.pago ? "Sim" : "Não"}</TableCell>
+                      <TableCell>
+                        <StatusConsulta status={consulta.status} />
+                      </TableCell>
+                      <TableCell>
+                        {consulta.pago ? (
+                          "Sim"
+                        ) : (
+                          <span className="text-muted-foreground">Não</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -256,7 +271,7 @@ function CabecalhoData({ direcao, aoAlternar }: PropsCabecalhoData) {
       <Button
         variant="ghost"
         size="sm"
-        className="-ml-2.5"
+        className="-ml-2.5 gap-1 text-xs font-semibold tracking-wide text-foreground uppercase"
         onClick={aoAlternar}
       >
         Data

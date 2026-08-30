@@ -111,7 +111,7 @@ test("o cabeçalho traz nome, idade e timer verde; Conteúdo e Notas vêm carreg
 
   const timer = screen.getByLabelText("Timer da consulta");
   expect(timer).toHaveTextContent("60:00");
-  expect(timer).toHaveClass("text-chart-2");
+  expect(timer).toHaveClass("text-success");
 
   expect(screen.getByLabelText("Conteúdo")).toHaveValue("Relato até aqui");
   expect(screen.getByLabelText("Notas")).toHaveTextContent("Hipóteses");
@@ -186,7 +186,7 @@ test("o timer amarela nos 15 minutos finais, avermelha nos 5 e conta o excedido"
 
   await passar(45 * 60 * 1000); // 45 min decorridos
   expect(timer()).toHaveTextContent("15:00");
-  expect(timer()).toHaveClass("text-chart-3");
+  expect(timer()).toHaveClass("text-warning");
 
   await passar(10 * 60 * 1000); // 55 min decorridos
   expect(timer()).toHaveTextContent("05:00");

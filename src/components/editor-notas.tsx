@@ -8,6 +8,7 @@ import {
 import StarterKit from "@tiptap/starter-kit";
 import { Bold, Italic, Strikethrough, Underline } from "lucide-react";
 import { useEffect } from "react";
+import { PainelConsulta } from "@/components/painel-consulta";
 import { Button } from "@/components/ui/button";
 import { SelectNativo } from "@/components/ui/select-nativo";
 import { useSalvamentoAutomatico } from "@/hooks/use-salvamento-automatico";
@@ -115,21 +116,17 @@ export function EditorNotas({
   if (editor === null) return null;
 
   return (
-    <div className="flex flex-col gap-2">
-      <div>
-        <span className="font-medium">Notas</span>
-        <p className="text-sm text-muted-foreground">Anotações da terapeuta</p>
-      </div>
-      <div
-        className={
-          "editor-notas glass-bg flex flex-1 flex-col rounded-xl focus-within:ring-2 focus-within:ring-ring" +
-          (desabilitado ? " opacity-70" : "")
-        }
-      >
-        <BarraDeFormatacao editor={editor} desabilitado={desabilitado} />
-        <EditorContent editor={editor} className="flex flex-1 flex-col" />
-      </div>
-    </div>
+    <PainelConsulta
+      titulo={<span>Notas</span>}
+      descricao="Anotações da terapeuta"
+      desabilitado={desabilitado}
+    >
+      <BarraDeFormatacao editor={editor} desabilitado={desabilitado} />
+      <EditorContent
+        editor={editor}
+        className="editor-notas flex flex-1 flex-col"
+      />
+    </PainelConsulta>
   );
 }
 
@@ -186,7 +183,7 @@ function BarraDeFormatacao({
     <div
       role="toolbar"
       aria-label="Formatação das Notas"
-      className="flex flex-wrap items-center gap-1 border-b border-border/60 px-2 py-1.5"
+      className="flex flex-wrap items-center gap-1 border-b border-border/60 px-3 py-2"
     >
       {marcas.map(({ rotulo, Icone, ativo, alternar }) => (
         <Button
@@ -197,7 +194,7 @@ function BarraDeFormatacao({
           aria-label={rotulo}
           aria-pressed={ativo}
           disabled={desabilitado}
-          className="aria-pressed:bg-muted aria-pressed:text-foreground"
+          className="aria-pressed:bg-accent aria-pressed:text-accent-foreground"
           onMouseDown={(evento) => evento.preventDefault()}
           onClick={alternar}
         >
@@ -205,11 +202,13 @@ function BarraDeFormatacao({
         </Button>
       ))}
 
+      <DivisoriaDaBarra />
+
       <SelectNativo
         aria-label="Título"
         value={String(estado.titulo)}
         disabled={desabilitado}
-        className="w-auto"
+        className="h-7 w-32 text-xs"
         onChange={(evento) => {
           const nivel = Number(evento.target.value);
           const cadeia = editor.chain().focus();
@@ -232,7 +231,7 @@ function BarraDeFormatacao({
         aria-label="Tamanho da fonte"
         value={estado.tamanho.replace("px", "")}
         disabled={desabilitado}
-        className="w-auto"
+        className="h-7 w-22 text-xs"
         onChange={(evento) => {
           const tamanho = evento.target.value;
           if (tamanho === "") {
@@ -249,6 +248,8 @@ function BarraDeFormatacao({
           </option>
         ))}
       </SelectNativo>
+
+      <DivisoriaDaBarra />
 
       {CORES_BASICAS.map(({ rotulo, cor }) => (
         <Button
@@ -276,4 +277,8 @@ function BarraDeFormatacao({
       ))}
     </div>
   );
+}
+
+function DivisoriaDaBarra() {
+  return <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />;
 }

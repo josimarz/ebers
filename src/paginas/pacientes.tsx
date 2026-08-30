@@ -1,7 +1,19 @@
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
+  Plus,
+  Search,
+  SearchX,
+  Users,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { AvisoErro } from "@/components/aviso";
+import { CabecalhoPagina } from "@/components/cabecalho-pagina";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { FotoPaciente } from "@/components/foto-paciente";
+import { SaldoCreditos } from "@/components/saldo-creditos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +34,7 @@ import {
   type OrdenacaoPacientes,
   type ParametrosListagem,
 } from "@/dominio/listagem-pacientes";
+import { cn } from "@/lib/utils";
 
 type Carga =
   | { estado: "carregando" }
@@ -85,35 +98,38 @@ export function PaginaPacientes() {
 
   return (
     <section className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="font-heading text-2xl font-semibold">Pacientes</h1>
-        <Button asChild>
-          <Link to="/pacientes/novo">Novo Paciente</Link>
-        </Button>
-      </div>
+      <CabecalhoPagina
+        titulo="Pacientes"
+        descricao="O cadastro de cada paciente e a porta de entrada da Consulta."
+        acoes={
+          <Button asChild>
+            <Link to="/pacientes/novo">
+              <Plus />
+              Novo Paciente
+            </Link>
+          </Button>
+        }
+      />
 
       {carga.estado === "carregando" && (
-        <p className="text-muted-foreground">Carregando pacientes…</p>
+        <p className="text-sm text-muted-foreground">Carregando pacientes…</p>
       )}
 
       {carga.estado === "erro" && (
-        <p className="text-destructive">
-          Não foi possível carregar os pacientes.
-        </p>
+        <AvisoErro>Não foi possível carregar os pacientes.</AvisoErro>
       )}
 
       {erroAoCriarConsulta && (
-        <p className="text-destructive">Não foi possível criar a consulta.</p>
+        <AvisoErro>Não foi possível criar a consulta.</AvisoErro>
       )}
 
       {carga.estado === "pronto" &&
         (carga.pacientes.length === 0 ? (
-          <div className="glass-bg flex flex-col items-center gap-1 rounded-xl px-6 py-12 text-center">
-            <p className="font-medium">Nenhum paciente cadastrado</p>
-            <p className="text-sm text-muted-foreground">
-              Os pacientes cadastrados aparecerão aqui.
-            </p>
-          </div>
+          <EstadoVazio
+            icone={Users}
+            titulo="Nenhum paciente cadastrado"
+            descricao="Os pacientes cadastrados aparecerão aqui."
+          />
         ) : (
           <TabelaDePacientes
             pacientes={carga.pacientes}
@@ -160,25 +176,30 @@ function TabelaDePacientes({
 
   return (
     <div className="flex flex-col gap-4">
-      <Input
-        type="search"
-        value={parametros.busca}
-        onChange={(evento) => aoBuscar(evento.target.value)}
-        placeholder="Buscar por nome"
-        aria-label="Buscar por nome"
-        className="max-w-xs"
-      />
+      <div className="relative max-w-xs">
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          type="search"
+          value={parametros.busca}
+          onChange={(evento) => aoBuscar(evento.target.value)}
+          placeholder="Buscar por nome"
+          aria-label="Buscar por nome"
+          className="pl-8"
+        />
+      </div>
 
       {itens.length === 0 ? (
-        <div className="glass-bg flex flex-col items-center gap-1 rounded-xl px-6 py-12 text-center">
-          <p className="font-medium">Nenhum paciente encontrado</p>
-          <p className="text-sm text-muted-foreground">
-            Nenhum nome corresponde à busca “{parametros.busca.trim()}”.
-          </p>
-        </div>
+        <EstadoVazio
+          icone={SearchX}
+          titulo="Nenhum paciente encontrado"
+          descricao={`Nenhum nome corresponde à busca “${parametros.busca.trim()}”.`}
+        />
       ) : (
         <>
-          <div className="glass-bg overflow-hidden rounded-xl">
+          <div className="glass-bg overflow-hidden rounded-2xl">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -209,7 +230,7 @@ function TabelaDePacientes({
               <TableBody>
                 {itens.map((paciente) => (
                   <TableRow key={paciente.id}>
-                    <TableCell>
+                    <TableCell className="w-14 pr-0">
                       <FotoPaciente
                         arquivo={paciente.foto}
                         nome={paciente.nomeCompleto}
@@ -223,9 +244,15 @@ function TabelaDePacientes({
                       {calcularIdade(paciente.dataNascimento, hoje)}
                     </TableCell>
                     <TableCell>{paciente.telefone1}</TableCell>
-                    <TableCell>{paciente.periodicidade ?? "—"}</TableCell>
-                    <TableCell>{paciente.diaSemanaConsulta ?? "—"}</TableCell>
-                    <TableCell>{saldos.get(paciente.id) ?? 0}</TableCell>
+                    <TableCell>
+                      <Valor>{paciente.periodicidade}</Valor>
+                    </TableCell>
+                    <TableCell>
+                      <Valor>{paciente.diaSemanaConsulta}</Valor>
+                    </TableCell>
+                    <TableCell>
+                      <SaldoCreditos saldo={saldos.get(paciente.id) ?? 0} />
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" asChild>
@@ -272,6 +299,14 @@ function TabelaDePacientes({
       )}
     </div>
   );
+}
+
+/** Valor opcional de uma célula: o travessão de "não informado" sai apagado. */
+function Valor({ children }: { children: string | null }) {
+  if (children === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return children;
 }
 
 interface PropsBotaoDeConsulta {
@@ -326,7 +361,10 @@ function CabecalhoOrdenavel({
       <Button
         variant="ghost"
         size="sm"
-        className="-ml-2.5"
+        className={cn(
+          "-ml-2.5 gap-1 text-xs font-semibold tracking-wide uppercase",
+          ativa ? "text-foreground" : "text-muted-foreground",
+        )}
         onClick={() => aoOrdenar(coluna)}
       >
         {children}

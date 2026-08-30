@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,12 @@ export function FiltroPaciente({
 
   return (
     <div ref={raiz} className="relative flex max-w-xs gap-2">
+      <Search
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+      />
       <Input
+        className="pl-8"
         role="combobox"
         aria-expanded={aberto}
         aria-controls="opcoes-filtro-paciente"
@@ -89,7 +94,7 @@ export function FiltroPaciente({
           id="opcoes-filtro-paciente"
           role="listbox"
           aria-label="Pacientes"
-          className="glass-frosted absolute top-full right-0 left-0 z-10 mt-1 max-h-64 overflow-y-auto rounded-lg py-1"
+          className="glass-frosted absolute top-full right-0 left-0 z-10 mt-1.5 max-h-64 overflow-y-auto rounded-xl p-1"
         >
           {sugeridos.map((paciente) => (
             <button
@@ -97,7 +102,7 @@ export function FiltroPaciente({
               type="button"
               role="option"
               aria-selected={paciente.id === selecionado}
-              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent"
+              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground aria-selected:bg-accent aria-selected:font-medium aria-selected:text-accent-foreground"
               onClick={() => selecionar(paciente)}
               onBlur={fecharSeSaiu}
             >
