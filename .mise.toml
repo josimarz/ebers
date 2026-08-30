@@ -1,0 +1,31 @@
+[tools]
+node = "26"
+rust = "1.94"
+
+[tasks.dev]
+description = "Roda o app desktop (Tauri + Vite)"
+run = "npm run tauri dev"
+
+[tasks.test]
+description = "Testes do frontend (Vitest) e do backend (cargo test)"
+run = [
+  "npm run test:run",
+  "cargo test --manifest-path src-tauri/Cargo.toml",
+]
+
+[tasks.lint]
+description = "Biome: lint + formatação do frontend"
+run = "npm run lint"
+
+[tasks."db:generate"]
+description = "Gera migração SQL a partir do schema Drizzle (src/db/schema.ts)"
+run = "npx drizzle-kit generate"
+
+[tasks."build:macos"]
+description = "Empacota o app para macOS como binário universal (Intel + Apple Silicon)"
+# Universal e não só a arquitetura de quem constrói: cada fatia compila com o
+# próprio cfg, então a arm64 sai com o Metal e a x86_64 sem ele (ADR-0006).
+run = [
+  "rustup target add aarch64-apple-darwin x86_64-apple-darwin",
+  "npm run tauri build -- --target universal-apple-darwin",
+]

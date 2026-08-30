@@ -1,0 +1,59 @@
+[package]
+name = "ebers"
+version = "0.1.0"
+description = "Gerenciamento de pacientes e consultas do consultório de psicologia"
+authors = ["Josimar Zimermann"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "ebers_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
+# Fotos de perfil: decodificação, redimensionamento e reencode em JPEG.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+# Servidor HTTP local do Auto-cadastro (spec 5.1, ADR-0003).
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
+# Acesso direto ao ebers.db nas rotas do Auto-cadastro. Mesma versão de
+# libsqlite3-sys usada pelo sqlx do tauri-plugin-sql (chave `links`: só pode
+# haver uma no grafo).
+rusqlite = { version = "0.32", features = ["bundled"] }
+# Transcrição de voz offline da Consulta (spec 5.3, ADR-0004).
+whisper-rs = "0.16"
+
+# No Apple Silicon o Whisper roda na GPU via Metal — dá folga para os modelos
+# maiores (base/small) sem travar a máquina durante a Consulta. Nos Macs Intel
+# o backend não entra nem na compilação: aquelas GPUs devolvem transcrição
+# ilegível (ver USAR_GPU em src/transcricao.rs) e o Metal ainda cobra ~19 s de
+# compilação de shaders na primeira transcrição.
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+whisper-rs = { version = "0.16", features = ["metal"] }
+
+# Prévia da transcrição (ADR-0007): o reconhecedor de fala on-device do
+# macOS (framework Speech) via objc2. Só existe no macOS.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSLocale", "NSString", "NSOperation", "NSProcessInfo", "NSError", "NSObject"] }
+objc2-speech = { version = "0.3", features = ["SFSpeechRecognizer", "SFSpeechRecognitionRequest", "SFSpeechRecognitionResult", "SFSpeechRecognitionTask", "SFTranscription", "SFSpeechRecognitionTaskHint", "block2", "objc2-avf-audio"] }
+objc2-avf-audio = { version = "0.3", features = ["AVAudioBuffer", "AVAudioFormat", "AVAudioTypes"] }
+
+[dev-dependencies]
+tempfile = "3"
+# `oneshot` para exercitar as rotas Axum nos testes.
+tower = { version = "0.5", features = ["util"] }
+

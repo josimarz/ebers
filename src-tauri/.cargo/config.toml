@@ -1,0 +1,14 @@
+# Configuração de build do backend. O `[env]` alcança os build scripts das
+# dependências — é assim que o whisper.cpp, compilado do zero pelo
+# whisper-rs-sys, recebe as opções de CMake (o build.rs dele repassa toda
+# variável `GGML_*` e `CMAKE_*` do ambiente).
+
+[env]
+# Sem isto o ggml assume `GGML_NATIVE=ON` e compila com `-march=native`: o
+# binário sai sintonizado no processador de quem construiu e trava com
+# "instrução ilegal" em qualquer máquina mais modesta — sem aviso, na primeira
+# transcrição. Desligado, a linha de base passa a ser AVX2+FMA+F16C, presente
+# em todo Mac Intel de 2013 em diante, e o build vira reprodutível.
+# Custo medido nesta máquina: 3,7× o tempo real contra 5,1× do `native`, com
+# transcrição idêntica. Ver ADR-0006.
+GGML_NATIVE = "OFF"

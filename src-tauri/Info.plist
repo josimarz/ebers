@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Transcrição de voz da Consulta (spec 2.3): sem esta chave o macOS nem
+	     pergunta, e o getUserMedia falha silenciosamente no WKWebView. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>O Ebers usa o microfone para transcrever a fala durante a Consulta — todo o processamento acontece neste computador.</string>
+	<!-- Prévia da transcrição (ADR-0007): o reconhecedor de fala do macOS, em
+	     modo on-device, mostra a Prévia enquanto o Whisper transcreve. Sem esta
+	     chave o app é encerrado ao pedir a autorização. -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>O Ebers usa o reconhecimento de fala do macOS para mostrar uma prévia do que está sendo dito durante a Consulta — só no próprio computador, nunca em servidores.</string>
+</dict>
+</plist>

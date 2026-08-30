@@ -1,7 +1,8 @@
 # Ebers
 
 Sistema web de gerenciamento de pacientes e consultas para consultório de psicologia.
-Toda a interface deve ser em português brasileiro (pt-BR). See `CONTEXT.md`.
+Toda a interface deve ser em português brasileiro (pt-BR).
+Glossário do domínio: `CONTEXT.md`. Especificação funcional: `docs/especificacao.md`. Decisões: `docs/adr/`.
 
 ## Agent skills
 

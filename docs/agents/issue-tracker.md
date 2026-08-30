@@ -2,10 +2,6 @@
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
-## Prerequisite
-
-As of setup, this directory is **not a git repo** and has no GitHub remote, so `gh` cannot resolve which repo to act on and every command below will fail. Before using any skill that reads or writes issues, run `git init`, create the GitHub repo (e.g. `gh repo create`), and add it as a remote. Delete this section once that's done.
-
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
