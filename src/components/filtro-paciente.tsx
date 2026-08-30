@@ -103,6 +103,12 @@ export function FiltroPaciente({
               role="option"
               aria-selected={paciente.id === selecionado}
               className="block w-full rounded-lg px-2.5 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground aria-selected:bg-accent aria-selected:font-medium aria-selected:text-accent-foreground"
+              // No WebKit (Safari e o WKWebView do app) um <button> não recebe
+              // foco ao ser clicado: o mousedown tiraria o foco do campo com
+              // relatedTarget nulo, fecharSeSaiu desmontaria a lista e o click
+              // nunca chegaria à opção. Cancelar o mousedown mantém o foco no
+              // campo; a seleção acontece no click, como nos outros motores.
+              onMouseDown={(evento) => evento.preventDefault()}
               onClick={() => selecionar(paciente)}
               onBlur={fecharSeSaiu}
             >
