@@ -166,6 +166,7 @@ function TabelaDeConsultas({
                   <TableHead>
                     <span className="sr-only">Foto</span>
                   </TableHead>
+                  <TableHead>Paciente</TableHead>
                   <CabecalhoData
                     direcao={parametros.direcao}
                     aoAlternar={aoAlternarDirecao}
@@ -201,8 +202,13 @@ function TabelaDeConsultas({
                         )}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {formatarData(consulta.iniciadoEm)}
+                        {paciente ? (
+                          paciente.nomeCompleto
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
+                      <TableCell>{formatarData(consulta.iniciadoEm)}</TableCell>
                       <TableCell>{formatarHora(consulta.iniciadoEm)}</TableCell>
                       <TableCell>
                         {consulta.finalizadoEm === null ? (

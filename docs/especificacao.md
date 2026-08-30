@@ -253,6 +253,7 @@ Página com tabela paginada (10 por página) de todas as consultas.
 | Coluna | Conteúdo |
 |---|---|
 | *(sem label)* | Foto do paciente |
+| Paciente | Nome completo do paciente |
 | Data | Data da consulta |
 | Início | Horário de início |
 | Fim | Horário de fim |
