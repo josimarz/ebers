@@ -7,10 +7,21 @@ Guia para a terapeuta.
 Com o Ebers aberto, qualquer navegador na mesma rede Wi-Fi do consultório
 mostra o Auto-cadastro — sem instalar nada no tablet:
 
-1. Descubra o IP do computador do consultório (macOS: Ajustes do Sistema →
-   Wi-Fi → Detalhes; Windows: Configurações → Rede e Internet).
-2. No navegador do tablet, acesse `http://IP-do-computador:8738` (ex.:
-   `http://192.168.0.10:8738`) e salve nos favoritos.
+1. No Ebers, clique em **Auto-cadastro** (o botão com o código, no canto
+   direito do cabeçalho). Abre a janela "Auto-cadastro no tablet".
+2. Com o tablet no Wi-Fi do consultório, aponte a câmera dele para o código
+   e toque no link que aparece.
+3. Salve a página nos favoritos do tablet: o endereço continua valendo
+   enquanto o Ebers estiver aberto no computador.
+
+Se um dia o favorito parar de abrir (o roteador pode ter dado outro endereço
+ao computador), abra a janela de novo e leia o código outra vez. O endereço
+também aparece por extenso embaixo do código (algo como
+`http://192.168.0.10:8738`), se preferir digitá-lo no navegador do tablet.
+
+> Se a janela avisar que o Auto-cadastro não está no ar, feche e abra o
+> Ebers de novo. Se avisar que o computador não está em nenhuma rede,
+> conecte-o ao Wi-Fi do consultório e clique em "Tentar de novo".
 
 Pela rede só existe o formulário de Auto-cadastro; as demais telas ficam
 restritas ao app no computador

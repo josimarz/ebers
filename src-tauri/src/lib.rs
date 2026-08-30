@@ -4,6 +4,7 @@ use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub mod cpf;
+pub mod endereco;
 pub mod fotos;
 pub mod previa;
 pub mod servidor;
@@ -98,6 +99,15 @@ fn remover_foto_paciente(app: tauri::AppHandle, arquivo: String) -> Result<(), S
     fotos::remover(&diretorio_de_fotos(&app)?, &arquivo)
 }
 
+/// O endereço que o tablet abre para o Auto-cadastro, ou por que não há um —
+/// a modal do QR code (issue #21) consulta a cada abertura.
+#[tauri::command]
+fn endereco_auto_cadastro(
+    estado: tauri::State<'_, servidor::EstadoDoServidor>,
+) -> endereco::EnderecoAutoCadastro {
+    endereco::endereco_auto_cadastro(&estado)
+}
+
 /// Nome do modelo Whisper disponível (ou nulo) — o frontend consulta antes de
 /// ligar o microfone, para avisar quando ainda não há modelo baixado.
 #[tauri::command]
@@ -171,12 +181,14 @@ pub fn run() {
                 .add_migrations(URL_BANCO, migracoes())
                 .build(),
         )
+        .manage(servidor::EstadoDoServidor::default())
         .manage(transcricao::Transcritor::default())
         .manage(previa::Previa::default())
         .invoke_handler(tauri::generate_handler![
             salvar_foto_paciente,
             carregar_foto_paciente,
             remover_foto_paciente,
+            endereco_auto_cadastro,
             modelo_de_transcricao,
             transcrever_audio,
             previa_disponibilidade,

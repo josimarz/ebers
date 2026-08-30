@@ -6,7 +6,10 @@
 //! consciente (ADR-0003): a rede física do consultório é considerada
 //! confiável e as rotas só permitem criação, nunca leitura ou edição.
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -18,6 +21,24 @@ use serde::Deserialize;
 /// Porta fixa do servidor: a URL no tablet (favorito do navegador) não muda
 /// entre reinícios do app.
 pub const PORTA: u16 = 8738;
+
+/// Se o servidor está com a porta aberta — decidido em `iniciar`, antes de a
+/// janela aparecer, e consultado pela modal do QR code (endereco.rs). Nasce
+/// fora do ar: só o `bind` bem-sucedido o coloca no ar.
+#[derive(Clone, Default)]
+pub struct EstadoDoServidor {
+    no_ar: Arc<AtomicBool>,
+}
+
+impl EstadoDoServidor {
+    pub fn no_ar(&self) -> bool {
+        self.no_ar.load(Ordering::Relaxed)
+    }
+
+    fn marcar(&self, no_ar: bool) {
+        self.no_ar.store(no_ar, Ordering::Relaxed);
+    }
+}
 
 /// Caminhos que as rotas do Auto-cadastro usam para persistir.
 #[derive(Clone)]
@@ -72,27 +93,36 @@ pub fn rotas_auto_cadastro(estado: EstadoAutoCadastro) -> Router {
         .with_state(estado)
 }
 
-/// Sobe o servidor em segundo plano, junto com o app (lib.rs). Uma falha —
-/// porta ocupada, por exemplo — não derruba o modo desktop: fica no stderr e
-/// o Auto-cadastro volta no próximo início do app.
+/// Sobe o servidor junto com o app (lib.rs). Uma falha — porta ocupada, por
+/// exemplo — não derruba o modo desktop: fica no stderr, o `EstadoDoServidor`
+/// continua fora do ar (a modal do QR code avisa) e o Auto-cadastro volta no
+/// próximo início do app.
 pub fn iniciar(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+
     let estado = EstadoAutoCadastro {
         caminho_banco: crate::caminho_do_banco(app)?,
         diretorio_fotos: crate::diretorio_de_fotos(app)?,
     };
     let rotas = rotas_auto_cadastro(estado).fallback_service(rotas_spa(app.clone()));
+    // Escuta a rede local inteira: é assim que o tablet chega (ADR-0003). A
+    // porta é aberta aqui mesmo, de forma síncrona, para o estado do servidor
+    // estar decidido antes de a janela aparecer.
+    let toda_a_rede = SocketAddr::from(([0, 0, 0, 0], PORTA));
+    let escuta = tauri::async_runtime::block_on(tokio::net::TcpListener::bind(toda_a_rede))
+        .map_err(|erro| format!("não conseguiu abrir a porta {PORTA}: {erro}"))?;
+    let estado_do_servidor = app.state::<EstadoDoServidor>().inner().clone();
+    estado_do_servidor.marcar(true);
+    match crate::endereco::endereco_auto_cadastro(&estado_do_servidor) {
+        crate::endereco::EnderecoAutoCadastro::NoAr { url } => {
+            println!("Auto-cadastro na rede local: {url}");
+        }
+        sem_endereco => println!("Auto-cadastro na rede local: {sem_endereco:?}"),
+    }
     tauri::async_runtime::spawn(async move {
-        // Escuta a rede local inteira: é assim que o tablet chega (ADR-0003).
-        let escuta = match tokio::net::TcpListener::bind(("0.0.0.0", PORTA)).await {
-            Ok(escuta) => escuta,
-            Err(erro) => {
-                eprintln!("Servidor do Auto-cadastro não conseguiu abrir a porta {PORTA}: {erro}");
-                return;
-            }
-        };
-        println!("Auto-cadastro na rede local: http://<IP-deste-computador>:{PORTA}");
         if let Err(erro) = axum::serve(escuta, rotas).await {
             eprintln!("Servidor do Auto-cadastro parou: {erro}");
+            estado_do_servidor.marcar(false);
         }
     });
     Ok(())

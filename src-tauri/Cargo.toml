@@ -28,6 +28,9 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 # Servidor HTTP local do Auto-cadastro (spec 5.1, ADR-0003).
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
+# Endereços IPv4 da máquina na rede local, para o QR code do Auto-cadastro
+# (issue #21): a modal mostra o endereço que o tablet deve abrir.
+local-ip-address = "0.6.13"
 # Acesso direto ao ebers.db nas rotas do Auto-cadastro. Mesma versão de
 # libsqlite3-sys usada pelo sqlx do tauri-plugin-sql (chave `links`: só pode
 # haver uma no grafo).
