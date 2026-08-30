@@ -83,6 +83,7 @@ test("a tabela tem as colunas da spec, na ordem", async () => {
     .map((cabecalho) => cabecalho.textContent);
   expect(cabecalhos).toEqual([
     "Foto",
+    "Paciente",
     "Data",
     "Início",
     "Fim",
@@ -103,7 +104,15 @@ test("consulta Aberta vira uma linha com data, início, fim vazio e Pago Não", 
   const celulas = within(linha as HTMLElement)
     .getAllByRole("cell")
     .map((celula) => celula.textContent);
-  expect(celulas).toEqual(["", "08/08/2026", "14:30", "—", "Aberta", "Não"]);
+  expect(celulas).toEqual([
+    "",
+    "Ana Lima",
+    "08/08/2026",
+    "14:30",
+    "—",
+    "Aberta",
+    "Não",
+  ]);
 });
 
 test("consulta Finalizada e paga mostra o fim e Pago Sim", async () => {
@@ -128,6 +137,7 @@ test("consulta Finalizada e paga mostra o fim e Pago Sim", async () => {
     .map((celula) => celula.textContent);
   expect(celulas).toEqual([
     "",
+    "Ana Lima",
     "08/08/2026",
     "14:00",
     "15:05",
@@ -151,13 +161,34 @@ test("consultas Canceladas aparecem normalmente na listagem", async () => {
   expect(datasExibidas()).toHaveLength(2);
 });
 
-/** Coluna Data das linhas do corpo da tabela, na ordem exibida. */
-function datasExibidas(): string[] {
+/** Uma coluna das linhas do corpo da tabela, na ordem exibida. */
+function colunaExibida(indice: number): string[] {
   const corpo = screen.getAllByRole("rowgroup")[1];
   return within(corpo)
     .getAllByRole("row")
-    .map((linha) => within(linha).getAllByRole("cell")[1].textContent ?? "");
+    .map(
+      (linha) => within(linha).getAllByRole("cell")[indice].textContent ?? "",
+    );
 }
+
+/** Coluna Data das linhas, na ordem exibida. */
+function datasExibidas(): string[] {
+  return colunaExibida(2);
+}
+
+test("cada linha mostra o nome do paciente da consulta", async () => {
+  programarCarga(
+    [
+      consultaNaListagem({ pacienteId: 2, iniciadoEm: iso(7, 10) }),
+      consultaNaListagem({ pacienteId: 1, iniciadoEm: iso(8, 14) }),
+    ],
+    [pacienteAna(), pacienteBruno()],
+  );
+  renderizarPagina();
+
+  await screen.findByText("08/08/2026");
+  expect(colunaExibida(1)).toEqual(["Ana Lima", "Bruno Castro"]);
+});
 
 test("a listagem nasce ordenada da mais recente para a mais antiga; clicar em Data inverte", async () => {
   const terapeuta = userEvent.setup();
