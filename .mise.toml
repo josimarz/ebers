@@ -29,3 +29,11 @@ run = [
   "rustup target add aarch64-apple-darwin x86_64-apple-darwin",
   "npm run tauri build -- --target universal-apple-darwin",
 ]
+
+[tasks.icone]
+description = "Regenera os ícones do app (src-tauri/icons/) a partir de src-tauri/icons/icone.svg"
+# O `tauri icon` também emite os conjuntos Android e iOS; o Ebers é só desktop.
+run = [
+  "npm run tauri icon src-tauri/icons/icone.svg",
+  "rm -rf src-tauri/icons/android src-tauri/icons/ios",
+]

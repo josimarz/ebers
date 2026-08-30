@@ -110,6 +110,22 @@ de modal (`tw-animate-css`), o ponto pulsante do microfone gravando. Sob
 `prefers-reduced-motion: reduce` todas as animações e transições são zeradas
 (regra global em `index.css`).
 
+### 2.7 Ícone do app
+
+O ícone de distribuição (Dock, Finder, `.dmg`) é o **Ψ** — psi, a letra da
+psicologia — em branco sobre o azul da marca. O glifo é geométrico, em traço
+único de ponta redonda (haste e taça com o mesmo peso), no espírito das formas
+da Plus Jakarta Sans; o tile leva `--primary` em degradê (mais claro no alto,
+mais fundo embaixo), as luzes violeta e menta do pano de fundo (§2.5) nos
+cantos e o fio de luz na borda das superfícies de vidro (§2.4). O tile segue o
+grid de ícones do macOS: squircle de 824 px com cantos contínuos num canvas
+de 1024, com margem transparente — é o que alinha o Ebers aos vizinhos no
+Dock.
+
+Fonte: [`src-tauri/icons/icone.svg`](../src-tauri/icons/icone.svg). Os
+PNG/ICNS/ICO ao lado são gerados por `mise run icone` (`tauri icon`) e não se
+editam à mão.
+
 ## 3. Regras por componente
 
 ### 3.1 Moldura (`layout/layout-app.tsx`)

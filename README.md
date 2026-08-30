@@ -35,6 +35,8 @@ Universal e não só a arquitetura de quem constrói: cada fatia compila com o p
 
 O modelo de voz **não** é empacotado: quem instalar precisa baixá-lo uma vez ([`docs/operacao.md`](docs/operacao.md)). Sem ele o app funciona normalmente e o botão do microfone avisa o que falta.
 
+O ícone do app (o Ψ sobre o azul da marca, ver [`docs/design.md`](docs/design.md) §2.7) tem como fonte [`src-tauri/icons/icone.svg`](src-tauri/icons/icone.svg); os PNG/ICNS/ICO ao lado são gerados por `mise run icone` — edite o SVG, nunca os gerados.
+
 ## Dados
 
 O banco SQLite (`ebers.db`) é criado no diretório de dados do app na primeira execução; as fotos de perfil ficam ao lado dele em `fotos/` e o modelo Whisper da transcrição de voz em `modelos/` (ver [`docs/operacao.md`](docs/operacao.md)); as migrações em [`src-tauri/migrations/`](src-tauri/migrations/) são geradas pelo `drizzle-kit` (`mise run db:generate`) e aplicadas pelo backend Rust na inicialização.
