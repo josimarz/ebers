@@ -1,13 +1,19 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useParams } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { EVENTO_PACIENTE_CADASTRADO } from "@/db/eventos";
 import type { DadosPaciente } from "@/dominio/paciente";
 import {
   chamadasDeComando,
   programarComando,
   reiniciarComandosFalsos,
 } from "@/testes/comandos-falsos";
+import {
+  emitirEventoFalso,
+  reiniciarEventosFalsos,
+  totalDeOuvintes,
+} from "@/testes/eventos-falsos";
 import { consultaAberta, linhaDeConsulta } from "@/testes/fixtures-consulta";
 import {
   dadosPacienteValidos,
@@ -20,15 +26,17 @@ import {
 } from "@/testes/plugin-sql-falso";
 import { PaginaPacientes } from "./pacientes";
 
-// Fronteiras do sistema: o banco SQLite atrás do tauri-plugin-sql e o comando
-// Tauri que lê fotos. O caminho página → listarPacientes → drizzle roda de
-// verdade.
+// Fronteiras do sistema: o banco SQLite atrás do tauri-plugin-sql, o comando
+// Tauri que lê fotos e os eventos Tauri que o backend emite. O caminho
+// página → listarPacientes → drizzle roda de verdade.
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
 vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
+vi.mock("@tauri-apps/api/event", () => import("@/testes/eventos-falsos"));
 
 beforeEach(() => {
   reiniciarBancoFalso();
   reiniciarComandosFalsos();
+  reiniciarEventosFalsos();
   proximoId = 1;
   // Só o relógio de parede é falso (idades estáveis); timers continuam reais
   // para não interferir no user-event e nos findBy*.
@@ -363,6 +371,85 @@ test("a listagem é paginada de 10 em 10", async () => {
 
   expect(nomesExibidos()).toHaveLength(10);
   expect(screen.getByText("Página 1 de 2")).toBeInTheDocument();
+});
+
+/** Recarga vinda do banco: Ana já cadastrada e Bia recém-chegada do tablet. */
+function anaEBia() {
+  return [
+    pacienteNaListagem(),
+    pacienteNaListagem({ nomeCompleto: "Bia Souza", cpf: "12345678909" }),
+  ];
+}
+
+test("um Auto-cadastro chegando do tablet recarrega a listagem", async () => {
+  enfileirarSelect([pacienteNaListagem()]);
+  renderizarPagina();
+  await screen.findByText("Ana Lima");
+
+  // O servidor local gravou Bia e avisou; a página relê o banco (issue #22).
+  enfileirarSelect(anaEBia());
+  emitirEventoFalso(EVENTO_PACIENTE_CADASTRADO);
+
+  expect(await screen.findByText("Bia Souza")).toBeInTheDocument();
+  expect(screen.getByText("Ana Lima")).toBeInTheDocument();
+});
+
+test("a recarga preserva a busca digitada", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect([pacienteNaListagem()]);
+  renderizarPagina();
+  await screen.findByText("Ana Lima");
+
+  await terapeuta.type(
+    screen.getByRole("searchbox", { name: "Buscar por nome" }),
+    "bia",
+  );
+  expect(screen.getByText("Nenhum paciente encontrado")).toBeInTheDocument();
+
+  enfileirarSelect(anaEBia());
+  emitirEventoFalso(EVENTO_PACIENTE_CADASTRADO);
+
+  // A linha nova entra já filtrada pela busca que estava na tela.
+  expect(await screen.findByText("Bia Souza")).toBeInTheDocument();
+  expect(screen.queryByText("Ana Lima")).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("searchbox", { name: "Buscar por nome" }),
+  ).toHaveValue("bia");
+});
+
+test("a recarga preserva a página em exibição", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect(onzePacientes());
+  renderizarPagina();
+  await screen.findByText("Paciente 01");
+  await terapeuta.click(screen.getByRole("button", { name: "Próxima" }));
+  expect(screen.getByText("Página 2 de 2")).toBeInTheDocument();
+
+  enfileirarSelect([
+    ...onzePacientes(),
+    pacienteNaListagem({ nomeCompleto: "Bia Souza", cpf: "12345678909" }),
+  ]);
+  emitirEventoFalso(EVENTO_PACIENTE_CADASTRADO);
+
+  // Bia entra na primeira página (ordem por nome) e empurra o Paciente 10
+  // para a segunda — que segue em exibição, sem voltar ao início.
+  await waitFor(() => {
+    expect(nomesExibidos()).toEqual(["Paciente 10", "Paciente 11"]);
+  });
+  expect(screen.getByText("Página 2 de 2")).toBeInTheDocument();
+});
+
+test("sair da página para de escutar o Auto-cadastro", async () => {
+  enfileirarSelect([pacienteNaListagem()]);
+  const { unmount } = renderizarPagina();
+  await screen.findByText("Ana Lima");
+  expect(totalDeOuvintes(EVENTO_PACIENTE_CADASTRADO)).toBe(1);
+
+  unmount();
+
+  await vi.waitFor(() => {
+    expect(totalDeOuvintes(EVENTO_PACIENTE_CADASTRADO)).toBe(0);
+  });
 });
 
 test("buscar volta para a primeira página", async () => {

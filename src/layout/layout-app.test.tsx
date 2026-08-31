@@ -7,15 +7,18 @@ import {
   programarComando,
   reiniciarComandosFalsos,
 } from "@/testes/comandos-falsos";
+import { reiniciarEventosFalsos } from "@/testes/eventos-falsos";
 import { encerrarModoDesktop, simularModoDesktop } from "@/testes/modo-desktop";
 
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-vazio"));
 vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
+vi.mock("@tauri-apps/api/event", () => import("@/testes/eventos-falsos"));
 
 // Estas telas são o Modo desktop: o layout só aparece dentro do webview do app.
 beforeEach(() => {
   simularModoDesktop();
   reiniciarComandosFalsos();
+  reiniciarEventosFalsos();
 });
 afterEach(encerrarModoDesktop);
 

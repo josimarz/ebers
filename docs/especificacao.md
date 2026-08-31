@@ -105,6 +105,8 @@ Página com tabela paginada (10 por página) de todos os pacientes cadastrados.
 
 **Filtro:** busca por nome do paciente, ignorando acentos e diferenças de caixa.
 
+**Atualização ao vivo:** um Auto-cadastro concluído no tablet aparece na listagem sem sair da página — o servidor local avisa o app (evento `paciente-cadastrado`) e a tabela é recarregada, preservando busca, ordenação e página. Sem polling e sem notificação visual além da linha nova aparecer.
+
 ### 1.3 Formulário de cadastro/edição de paciente
 
 Página responsiva para cadastro e edição de pacientes.
