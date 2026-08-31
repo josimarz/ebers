@@ -5,6 +5,8 @@
 //! Paciente e receber a foto de perfil. Sem autenticação, por decisão
 //! consciente (ADR-0003): a rede física do consultório é considerada
 //! confiável e as rotas só permitem criação, nunca leitura ou edição.
+//! Cada Paciente gravado emite o evento `paciente-cadastrado` para o app
+//! (issue #22): é o que mantém a listagem de Pacientes do desktop em dia.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -40,11 +42,21 @@ impl EstadoDoServidor {
     }
 }
 
-/// Caminhos que as rotas do Auto-cadastro usam para persistir.
+/// Evento Tauri emitido a cada Paciente gravado pelo Auto-cadastro — espelho
+/// de EVENTO_PACIENTE_CADASTRADO em src/db/eventos.ts. A listagem de
+/// Pacientes do desktop recarrega ao recebê-lo (issue #22).
+pub const EVENTO_PACIENTE_CADASTRADO: &str = "paciente-cadastrado";
+
+/// Caminhos que as rotas do Auto-cadastro usam para persistir, e o aviso que
+/// mantém o desktop em dia.
 #[derive(Clone)]
 pub struct EstadoAutoCadastro {
     pub caminho_banco: PathBuf,
     pub diretorio_fotos: PathBuf,
+    /// Chamado logo após gravar um Paciente — aviso sem carga: quem escuta
+    /// relê o banco. Em produção (`iniciar`) emite EVENTO_PACIENTE_CADASTRADO
+    /// com o `AppHandle`; os testes contam chamadas.
+    pub avisar_paciente_cadastrado: Arc<dyn Fn() + Send + Sync>,
 }
 
 /// Cadastro como o formulário do Modo tablet envia (src/db/auto-cadastro.ts):
@@ -103,6 +115,18 @@ pub fn iniciar(app: &tauri::AppHandle) -> Result<(), String> {
     let estado = EstadoAutoCadastro {
         caminho_banco: crate::caminho_do_banco(app)?,
         diretorio_fotos: crate::diretorio_de_fotos(app)?,
+        avisar_paciente_cadastrado: {
+            let app = app.clone();
+            Arc::new(move || {
+                use tauri::Emitter;
+                // Falha de emissão não interfere na resposta ao tablet: o
+                // cadastro já está gravado; a listagem se atualiza na próxima
+                // visita à página.
+                if let Err(erro) = app.emit(EVENTO_PACIENTE_CADASTRADO, ()) {
+                    eprintln!("Evento {EVENTO_PACIENTE_CADASTRADO} não foi emitido: {erro}");
+                }
+            })
+        },
     };
     let rotas = rotas_auto_cadastro(estado).fallback_service(rotas_spa(app.clone()));
     // Escuta a rede local inteira: é assim que o tablet chega (ADR-0003). A
@@ -179,7 +203,10 @@ async fn cadastrar_paciente(
         return StatusCode::UNPROCESSABLE_ENTITY;
     }
     match inserir_paciente(&estado.caminho_banco, &novo) {
-        Ok(()) => StatusCode::CREATED,
+        Ok(()) => {
+            (estado.avisar_paciente_cadastrado)();
+            StatusCode::CREATED
+        }
         Err(erro) if cpf_ja_cadastrado(&erro) => StatusCode::CONFLICT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -327,6 +354,7 @@ mod testes {
         let estado = EstadoAutoCadastro {
             caminho_banco,
             diretorio_fotos: pasta.path().join(crate::fotos::DIRETORIO_FOTOS),
+            avisar_paciente_cadastrado: Arc::new(|| {}),
         };
         (pasta, estado)
     }
@@ -357,6 +385,18 @@ mod testes {
             "quandoFoiHospitalizado": null,
             "razaoHospitalizacao": null
         })
+    }
+
+    /// Estado cujo aviso conta quantas vezes o desktop seria avisado.
+    fn estado_com_contagem_de_avisos(
+    ) -> (tempfile::TempDir, EstadoAutoCadastro, Arc<std::sync::atomic::AtomicUsize>) {
+        let (pasta, mut estado) = estado_de_teste();
+        let avisos = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let contador = Arc::clone(&avisos);
+        estado.avisar_paciente_cadastrado = Arc::new(move || {
+            contador.fetch_add(1, Ordering::SeqCst);
+        });
+        (pasta, estado, avisos)
     }
 
     async fn cadastrar(
@@ -435,6 +475,41 @@ mod testes {
             )
             .expect("consultar o paciente original");
         assert_eq!(nome, "Ana Lima", "o cadastro original deve ficar intacto");
+    }
+
+    #[tokio::test]
+    async fn cadastro_gravado_avisa_o_desktop_para_recarregar_a_listagem() {
+        let (_pasta, estado, avisos) = estado_com_contagem_de_avisos();
+
+        let status = cadastrar(&estado, &cadastro_valido()).await;
+
+        assert_eq!(status, StatusCode::CREATED);
+        // É este aviso que vira o evento `paciente-cadastrado` no app
+        // (issue #22): a listagem de Pacientes recarrega ao recebê-lo.
+        assert_eq!(avisos.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn cadastro_recusado_nao_avisa_o_desktop() {
+        let (_pasta, estado, avisos) = estado_com_contagem_de_avisos();
+
+        // CPF inválido: nada foi gravado, nada muda na listagem.
+        let mut invalido = cadastro_valido();
+        invalido["cpf"] = json!("11111111111");
+        assert_eq!(
+            cadastrar(&estado, &invalido).await,
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+
+        // CPF duplicado: o conflito também não grava nada.
+        assert_eq!(cadastrar(&estado, &cadastro_valido()).await, StatusCode::CREATED);
+        assert_eq!(cadastrar(&estado, &cadastro_valido()).await, StatusCode::CONFLICT);
+
+        assert_eq!(
+            avisos.load(Ordering::SeqCst),
+            1,
+            "só o cadastro gravado deve avisar o desktop"
+        );
     }
 
     #[tokio::test]

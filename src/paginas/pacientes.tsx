@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { consultasAbertas, criarConsulta } from "@/db/consultas";
 import { saldosDeCreditos } from "@/db/creditos";
+import { aoPacienteCadastrado } from "@/db/eventos";
 import { listarPacientes, type Paciente } from "@/db/pacientes";
 import { calcularIdade, hojeIso } from "@/dominio/idade";
 import {
@@ -58,15 +59,37 @@ export function PaginaPacientes() {
 
   useEffect(() => {
     let ativo = true;
-    Promise.all([listarPacientes(), saldosDeCreditos(), consultasAbertas()])
-      .then(([pacientes, saldos, abertas]) => {
-        if (ativo) setCarga({ estado: "pronto", pacientes, saldos, abertas });
-      })
-      .catch(() => {
-        if (ativo) setCarga({ estado: "erro" });
-      });
+    let geracao = 0;
+    function carregar() {
+      const geracaoDaCarga = ++geracao;
+      const maisRecente = () => ativo && geracaoDaCarga === geracao;
+      Promise.all([listarPacientes(), saldosDeCreditos(), consultasAbertas()])
+        .then(([pacientes, saldos, abertas]) => {
+          if (maisRecente())
+            setCarga({ estado: "pronto", pacientes, saldos, abertas });
+        })
+        .catch(() => {
+          // Recarga de fundo que falha não derruba a tabela já exibida.
+          if (maisRecente())
+            setCarga((atual) =>
+              atual.estado === "pronto" ? atual : { estado: "erro" },
+            );
+        });
+    }
+    // Auto-cadastro chegando do tablet: o servidor local avisa e a listagem
+    // relê o banco — a linha nova aparece sem sair da página (issue #22).
+    // A escuta entra antes da primeira carga para não haver janela de evento
+    // perdido: cadastro gravado antes dela já sai no primeiro SELECT; depois,
+    // dispara a recarga. Cargas concorrentes se resolvem pela geração — só a
+    // mais recente chega à tela.
+    const escuta = aoPacienteCadastrado(carregar).catch(
+      // Sem escuta (falha do IPC), a listagem atualiza ao revisitar a página.
+      () => () => {},
+    );
+    escuta.then(() => carregar());
     return () => {
       ativo = false;
+      escuta.then((pararDeEscutar) => pararDeEscutar());
     };
   }, []);
 

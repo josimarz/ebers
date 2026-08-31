@@ -3,18 +3,21 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { Rotas } from "@/rotas";
 import { reiniciarComandosFalsos } from "@/testes/comandos-falsos";
+import { reiniciarEventosFalsos } from "@/testes/eventos-falsos";
 import { fetchFalso, reiniciarFetchFalso } from "@/testes/fetch-falso";
 import { encerrarModoDesktop, simularModoDesktop } from "@/testes/modo-desktop";
 import { reiniciarBancoFalso } from "@/testes/plugin-sql-falso";
 
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
 vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
+vi.mock("@tauri-apps/api/event", () => import("@/testes/eventos-falsos"));
 vi.stubGlobal("fetch", fetchFalso);
 
 beforeEach(() => {
   reiniciarFetchFalso();
   reiniciarBancoFalso();
   reiniciarComandosFalsos();
+  reiniciarEventosFalsos();
 });
 
 afterEach(encerrarModoDesktop);
