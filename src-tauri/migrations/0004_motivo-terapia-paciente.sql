@@ -1,0 +1,1 @@
+ALTER TABLE `pacientes` ADD `motivo_terapia` text;

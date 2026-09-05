@@ -34,4 +34,4 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   );
 }
 
-export { classesDoCampo, Input };
+export { classesDeSomenteLeitura, classesDoCampo, Input };

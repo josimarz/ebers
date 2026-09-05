@@ -38,6 +38,9 @@ export const pacientes = sqliteTable("pacientes", {
   telefone1: text("telefone_1").notNull(),
   telefone2: text("telefone_2"),
   email: text("email"),
+  // Nula só para quem foi cadastrado antes do campo existir (migração 0004);
+  // a obrigatoriedade é do domínio, como nos condicionais clínicos.
+  motivoTerapia: text("motivo_terapia"),
   jaFezTerapia: integer("ja_fez_terapia", { mode: "boolean" }).notNull(),
   quandoFezTerapia: text("quando_fez_terapia"),
   tomaMedicamento: integer("toma_medicamento", { mode: "boolean" }).notNull(),

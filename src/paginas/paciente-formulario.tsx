@@ -7,6 +7,7 @@ import { FotoPaciente } from "@/components/foto-paciente";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectNativo } from "@/components/ui/select-nativo";
+import { Textarea } from "@/components/ui/textarea";
 import {
   criarPacienteAutoCadastro,
   salvarFotoAutoCadastro,
@@ -407,6 +408,26 @@ export function PaginaFormularioPaciente({
           {campoTexto("email", "Email", { tipo: "email" })}
         </SecaoFormulario>
 
+        {/* O Motivo da terapia (CONTEXT.md) nasce no cadastro, nas palavras do
+            Paciente: texto livre, sem lista fechada. Seção própria para não
+            reposicionar nenhum grupo existente (spec 1.3). */}
+        <SecaoFormulario titulo="Motivo da terapia">
+          <CampoTextoMultilinha
+            id="motivoTerapia"
+            rotulo="Motivo da terapia"
+            valor={formulario.motivoTerapia}
+            aoAlterar={alterar("motivoTerapia")}
+            erro={erros.motivoTerapia}
+            obrigatorio
+            // No tablet quem escreve é o Paciente; a Terapeuta não precisa da dica.
+            dica={
+              tablet
+                ? "Conte com suas palavras. Não precisa ser detalhado, a terapeuta vai conversar sobre isso com você."
+                : undefined
+            }
+          />
+        </SecaoFormulario>
+
         {/* Cada pergunta clínica abre um grupo com os próprios dependentes:
             todos ficam sempre na tela, só o somente-leitura muda. Assim
             nenhuma resposta reposiciona os campos das outras perguntas. */}
@@ -537,45 +558,41 @@ function GrupoCampos({ children }: { children: React.ReactNode }) {
   );
 }
 
-interface PropsCampoTexto {
+/** O que todo campo do formulário tem em volta do controle. */
+interface PropsEnvelopeDeCampo {
   id: string;
   rotulo: string;
-  valor: string;
-  aoAlterar: (valor: string) => void;
   obrigatorio?: boolean;
   erro?: string;
   dica?: string;
+  /** Ocupa a linha inteira da grade, em vez de meia. */
+  larguraTotal?: boolean;
+}
+
+interface PropsCampoTexto extends PropsEnvelopeDeCampo {
+  valor: string;
+  aoAlterar: (valor: string) => void;
   tipo?: "text" | "date" | "email";
   /** Campo visível mas não editável — a resposta de que ele depende não é "Sim". */
   somenteLeitura?: boolean;
   /** Reescreve o que foi digitado antes de guardar (ex.: máscara de CPF). */
   mascara?: (valor: string) => string;
   modoEntrada?: React.ComponentProps<"input">["inputMode"];
-  /** Ocupa a linha inteira da grade, em vez de meia. */
-  larguraTotal?: boolean;
 }
 
 function CampoTexto({
-  id,
-  rotulo,
   valor,
   aoAlterar,
-  obrigatorio = false,
-  erro,
-  dica,
   tipo = "text",
   somenteLeitura = false,
   mascara,
   modoEntrada,
-  larguraTotal = false,
+  ...envelope
 }: PropsCampoTexto) {
   return (
-    <div
-      className={cn("flex flex-col gap-1.5", larguraTotal && "md:col-span-2")}
-    >
-      <RotuloCampo para={id} obrigatorio={obrigatorio} texto={rotulo} />
+    <EnvelopeDeCampo {...envelope}>
       <Input
-        id={id}
+        id={envelope.id}
         type={tipo}
         value={valor}
         onChange={(evento) =>
@@ -585,45 +602,54 @@ function CampoTexto({
         }
         readOnly={somenteLeitura}
         inputMode={modoEntrada}
-        aria-required={obrigatorio}
-        aria-invalid={erro ? true : undefined}
-        aria-describedby={erro ? `${id}-erro` : undefined}
+        {...atributosAcessiveis(envelope)}
       />
-      {dica && <p className="text-xs text-muted-foreground">{dica}</p>}
-      <MensagemErroCampo id={`${id}-erro`} erro={erro} />
-    </div>
+    </EnvelopeDeCampo>
   );
 }
 
-interface PropsCampoSelect {
-  id: string;
-  rotulo: string;
+interface PropsCampoTextoMultilinha extends PropsEnvelopeDeCampo {
+  valor: string;
+  aoAlterar: (valor: string) => void;
+}
+
+/** Texto livre multilinha; ocupa sempre a linha inteira da grade. */
+function CampoTextoMultilinha({
+  valor,
+  aoAlterar,
+  ...envelope
+}: PropsCampoTextoMultilinha) {
+  return (
+    <EnvelopeDeCampo {...envelope} larguraTotal>
+      <Textarea
+        id={envelope.id}
+        value={valor}
+        onChange={(evento) => aoAlterar(evento.target.value)}
+        {...atributosAcessiveis(envelope)}
+      />
+    </EnvelopeDeCampo>
+  );
+}
+
+interface PropsCampoSelect extends PropsEnvelopeDeCampo {
   valor: string;
   aoAlterar: (valor: string) => void;
   opcoes: readonly string[];
-  obrigatorio?: boolean;
-  erro?: string;
 }
 
 function CampoSelect({
-  id,
-  rotulo,
   valor,
   aoAlterar,
   opcoes,
-  obrigatorio = false,
-  erro,
+  ...envelope
 }: PropsCampoSelect) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <RotuloCampo para={id} obrigatorio={obrigatorio} texto={rotulo} />
+    <EnvelopeDeCampo {...envelope}>
       <SelectNativo
-        id={id}
+        id={envelope.id}
         value={valor}
         onChange={(evento) => aoAlterar(evento.target.value)}
-        aria-required={obrigatorio}
-        aria-invalid={erro ? true : undefined}
-        aria-describedby={erro ? `${id}-erro` : undefined}
+        {...atributosAcessiveis(envelope)}
       >
         <option value="">Selecione…</option>
         {opcoes.map((opcao) => (
@@ -632,7 +658,56 @@ function CampoSelect({
           </option>
         ))}
       </SelectNativo>
-      <MensagemErroCampo id={`${id}-erro`} erro={erro} />
+    </EnvelopeDeCampo>
+  );
+}
+
+const idDaDica = (id: string) => `${id}-dica`;
+const idDoErro = (id: string) => `${id}-erro`;
+
+/**
+ * Atributos ARIA do controle: obrigatório, inválido e a descrição — dica e
+ * erro, na ordem em que aparecem na tela — para o leitor de tela ler junto
+ * com o rótulo.
+ */
+function atributosAcessiveis({
+  id,
+  obrigatorio = false,
+  dica,
+  erro,
+}: PropsEnvelopeDeCampo) {
+  const descricao = [dica && idDaDica(id), erro && idDoErro(id)]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    "aria-required": obrigatorio,
+    "aria-invalid": erro ? true : undefined,
+    "aria-describedby": descricao === "" ? undefined : descricao,
+  };
+}
+
+/** Rótulo, controle, dica e mensagem de erro — a casca de todo campo. */
+function EnvelopeDeCampo({
+  id,
+  rotulo,
+  obrigatorio = false,
+  erro,
+  dica,
+  larguraTotal = false,
+  children,
+}: PropsEnvelopeDeCampo & { children: React.ReactNode }) {
+  return (
+    <div
+      className={cn("flex flex-col gap-1.5", larguraTotal && "md:col-span-2")}
+    >
+      <RotuloCampo para={id} obrigatorio={obrigatorio} texto={rotulo} />
+      {children}
+      {dica && (
+        <p id={idDaDica(id)} className="text-xs text-muted-foreground">
+          {dica}
+        </p>
+      )}
+      <MensagemErroCampo id={idDoErro(id)} erro={erro} />
     </div>
   );
 }

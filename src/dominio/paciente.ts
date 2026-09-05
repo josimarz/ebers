@@ -70,6 +70,8 @@ export interface FormularioPaciente {
   telefone1: string;
   telefone2: string;
   email: string;
+  /** Motivo da terapia (CONTEXT.md): nas palavras do Paciente, texto livre. */
+  motivoTerapia: string;
   jaFezTerapia: string;
   quandoFezTerapia: string;
   tomaMedicamento: string;
@@ -97,6 +99,7 @@ export const FORMULARIO_PACIENTE_VAZIO: FormularioPaciente = {
   telefone1: "",
   telefone2: "",
   email: "",
+  motivoTerapia: "",
   jaFezTerapia: "",
   quandoFezTerapia: "",
   tomaMedicamento: "",
@@ -162,6 +165,7 @@ const CAMPOS_SEMPRE_OBRIGATORIOS = [
   "cpf",
   "religiao",
   "telefone1",
+  "motivoTerapia",
   "jaFezTerapia",
   "tomaMedicamento",
   "jaFoiHospitalizado",
@@ -269,6 +273,11 @@ export interface DadosPaciente {
   telefone1: string;
   telefone2: string | null;
   email: string | null;
+  /**
+   * Obrigatório pelo domínio daqui para a frente; null só em Pacientes
+   * gravados antes de o campo existir (coluna nasceu nula na migração).
+   */
+  motivoTerapia: string | null;
   jaFezTerapia: boolean;
   quandoFezTerapia: string | null;
   tomaMedicamento: boolean;
@@ -313,6 +322,7 @@ export function formularioParaDados(
     telefone1: dados.telefone1.trim(),
     telefone2: texto(dados.telefone2),
     email: texto(dados.email),
+    motivoTerapia: dados.motivoTerapia.trim(),
     jaFezTerapia: dados.jaFezTerapia === "Sim",
     quandoFezTerapia: dependente(dados.jaFezTerapia, dados.quandoFezTerapia),
     tomaMedicamento: dados.tomaMedicamento === "Sim",
@@ -357,6 +367,7 @@ export function dadosParaFormulario(dados: DadosPaciente): FormularioPaciente {
     telefone1: dados.telefone1,
     telefone2: dados.telefone2 ?? "",
     email: dados.email ?? "",
+    motivoTerapia: dados.motivoTerapia ?? "",
     jaFezTerapia: simNao(dados.jaFezTerapia),
     quandoFezTerapia: dados.quandoFezTerapia ?? "",
     tomaMedicamento: simNao(dados.tomaMedicamento),

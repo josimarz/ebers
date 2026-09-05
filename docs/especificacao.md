@@ -48,6 +48,7 @@ Escopo cortado de propósito — não são lacunas:
 | Telefone 1 | texto | Sim | Para paciente menor de idade, é o telefone do Responsável legal (convenção — sem campo próprio) |
 | Telefone 2 | texto | Não | — |
 | Email | email | Não | — |
+| Motivo da terapia | texto multilinha | Sim | O que o paciente relata, com as próprias palavras, como razão de ter procurado terapia — texto livre, sem limite nem lista fechada. Nasce no cadastro (pelo próprio paciente no Auto-cadastro, ou pela terapeuta no desktop) e pode ser revisado em "Editar Paciente" |
 | Já fez terapia? | enum | Sim | Sim, Não |
 | Quando fez terapia? | texto | Condicional | Obrigatório se "Já fez terapia?" = Sim |
 | Toma algum medicamento? | enum | Sim | Sim, Não |
@@ -121,6 +122,12 @@ Página responsiva para cadastro e edição de pacientes.
 
 - Os dois campos de CPF (do paciente e do Responsável legal) aplicam a máscara **000.000.000-00 enquanto o usuário digita**, ignorando o que não é dígito e parando no 11º. No banco o CPF é gravado só com os dígitos.
 
+**Motivo da terapia (nos dois modos):**
+
+- Seção própria **"Motivo da terapia"**, entre "Contato" e "Histórico clínico", com um único campo de texto multilinha ocupando a largura total — nenhum grupo existente muda de lugar.
+- Obrigatório nos dois modos; em branco, o erro padrão "Campo obrigatório". Um paciente cadastrado antes de o campo existir abre a edição com ele vazio e a terapeuta precisa preenchê-lo para salvar.
+- No Modo tablet, dica abaixo do campo: *"Conte com suas palavras. Não precisa ser detalhado, a terapeuta vai conversar sobre isso com você."* No desktop, sem dica.
+
 **Modo tablet (Auto-cadastro pelo paciente):**
 
 - Ao acessar o sistema via navegador na rede local (iPad ou qualquer outro dispositivo), o usuário é redirecionado automaticamente para o formulário de novo paciente.
@@ -188,6 +195,7 @@ Acionada pelo botão "Nova Consulta" na listagem de pacientes.
 - Idade do paciente
 - Timer em tempo real
 - Ações contextuais conforme o status (ver tabela de editabilidade): "Finalizar Consulta", "Efetuar Pagamento", "Desfazer Pagamento", "Cancelar Consulta"
+- **Motivo da terapia** (seção 1.1), numa linha própria abaixo de foto/nome/idade e das ações, com o texto completo — sem truncar nem "ver mais"; texto longo empurra Conteúdo e Notas para baixo. Somente leitura: editar é em "Editar Paciente". Paciente sem motivo registrado: *"Motivo da terapia não informado"*, discreto, com link para a edição do cadastro.
 
 **Timer (duração fixa: 1 hora, não configurável no v1):**
 

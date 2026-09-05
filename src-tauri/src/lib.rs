@@ -45,6 +45,12 @@ pub fn migracoes() -> Vec<Migration> {
             sql: include_str!("../migrations/0003_nova-consulta-e-movimentos-de-credito.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "motivo_terapia_paciente",
+            sql: include_str!("../migrations/0004_motivo-terapia-paciente.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -313,6 +319,25 @@ mod testes {
             .expect("consultar a foto do paciente");
 
         assert_eq!(foto.as_deref(), Some("foto-1.jpg"));
+    }
+
+    #[test]
+    fn motivo_da_terapia_nasce_nulo_para_cadastros_anteriores_ao_campo() {
+        let conexao = banco_migrado();
+
+        // Um Paciente gravado antes da migração 0004 não tem o campo: a coluna
+        // precisa aceitar a ausência para a migração não perder dados.
+        inserir_paciente(&conexao, "Ana Lima", "52998224725")
+            .expect("inserir paciente sem Motivo da terapia");
+
+        let motivo: Option<String> = conexao
+            .query_row(
+                "SELECT motivo_terapia FROM pacientes WHERE cpf = '52998224725'",
+                [],
+                |linha| linha.get(0),
+            )
+            .expect("consultar o Motivo da terapia");
+        assert_eq!(motivo, None);
     }
 
     /// Insere uma Consulta Aberta só com os campos sem valor padrão (spec 2.1).
