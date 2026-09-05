@@ -1018,7 +1018,8 @@ test("Finalizar Consulta com o microfone ligado ainda transcreve o que restou", 
   expect(screen.getByLabelText("Conteúdo")).toHaveValue("Frase final.");
 });
 
-test("sem modelo baixado, ligar o microfone explica o que falta", async () => {
+// O modelo vem embutido no app (ADR-0008): faltar é instalação avariada.
+test("sem modelo no app, ligar o microfone explica o que falta", async () => {
   const terapeuta = terapeutaComTimersFalsos();
   carregarConsulta();
   await renderizarPagina();
@@ -1031,7 +1032,7 @@ test("sem modelo baixado, ligar o microfone explica o que falta", async () => {
 
   expect(
     screen.getByText(
-      "Modelo de transcrição não instalado — veja o guia de operação.",
+      "Modelo de transcrição não encontrado — a instalação precisa ser refeita.",
     ),
   ).toBeInTheDocument();
   expect(capturaEstaAtiva()).toBe(false);

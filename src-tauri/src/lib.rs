@@ -67,10 +67,17 @@ pub(crate) fn diretorio_de_fotos(app: &tauri::AppHandle) -> Result<PathBuf, Stri
     Ok(diretorio_de_dados(app)?.join(fotos::DIRETORIO_FOTOS))
 }
 
-/// Diretório dos modelos Whisper: `modelos/` ao lado do `ebers.db`
-/// (docs/operacao.md explica à terapeuta como baixar o modelo para lá).
-pub(crate) fn diretorio_de_modelos(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(diretorio_de_dados(app)?.join(transcricao::DIRETORIO_MODELOS))
+/// Onde procurar o modelo Whisper, na ordem de precedência: `modelos/` ao
+/// lado do `ebers.db` — um modelo posto ali pelo desenvolvedor sobrepõe o
+/// embutido (ex.: `base` numa máquina que não acompanha o `small`) — e depois
+/// o `modelos/` empacotado com o app (ADR-0008). Sem diretório de recursos,
+/// o que não acontece num bundle, sobra só a pasta de dados.
+pub(crate) fn diretorios_de_modelos(app: &tauri::AppHandle) -> Result<Vec<PathBuf>, String> {
+    let mut diretorios = vec![diretorio_de_dados(app)?.join(transcricao::DIRETORIO_MODELOS)];
+    if let Ok(recursos) = app.path().resource_dir() {
+        diretorios.push(recursos.join(transcricao::DIRETORIO_MODELOS));
+    }
+    Ok(diretorios)
 }
 
 /// Caminho do `ebers.db` no disco — o mesmo arquivo que o tauri-plugin-sql
@@ -115,11 +122,16 @@ fn endereco_auto_cadastro(
 }
 
 /// Nome do modelo Whisper disponível (ou nulo) — o frontend consulta antes de
-/// ligar o microfone, para avisar quando ainda não há modelo baixado.
+/// ligar o microfone, para avisar quando não há modelo (instalação avariada).
 #[tauri::command]
 fn modelo_de_transcricao(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    Ok(transcricao::localizar_modelo(&diretorio_de_modelos(&app)?)
-        .and_then(|caminho| caminho.file_name().map(|nome| nome.to_string_lossy().into_owned())))
+    Ok(
+        transcricao::localizar_modelo_entre(&diretorios_de_modelos(&app)?).and_then(|caminho| {
+            caminho
+                .file_name()
+                .map(|nome| nome.to_string_lossy().into_owned())
+        }),
+    )
 }
 
 /// Recebe um trecho de áudio (f32 LE, 16 kHz mono) como corpo bruto do invoke
@@ -136,10 +148,28 @@ fn transcrever_audio(
     if amostras.is_empty() {
         return Ok(String::new());
     }
-    let caminho = transcricao::localizar_modelo(&diretorio_de_modelos(&app)?)
-        .ok_or("Nenhum modelo de transcrição em modelos/ (docs/operacao.md)")?;
-    let contexto = transcritor.contexto(&caminho)?;
-    transcricao::transcrever(&contexto, &transcricao::com_duracao_minima(amostras))
+    let candidatos = transcricao::candidatos_a_modelo(&diretorios_de_modelos(&app)?);
+    if candidatos.is_empty() {
+        return Err(
+            "Nenhum modelo de transcrição: nem embutido no app, nem em modelos/ (ADR-0008)".into(),
+        );
+    }
+    // Um modelo que não carrega (truncado, por exemplo) não pode esconder o
+    // embutido: o próximo candidato assume. O Transcritor lembra os que
+    // falharam, então a reserva não paga a carga avariada a cada trecho.
+    let mut ultimo_erro = String::new();
+    for caminho in &candidatos {
+        match transcritor.contexto(caminho) {
+            Ok(contexto) => {
+                return transcricao::transcrever(
+                    &contexto,
+                    &transcricao::com_duracao_minima(amostras),
+                );
+            }
+            Err(erro) => ultimo_erro = erro,
+        }
+    }
+    Err(ultimo_erro)
 }
 
 /// A Prévia (ADR-0007) pode ser mostrada nesta máquina? Pede a permissão
@@ -208,6 +238,27 @@ pub fn run() {
             // uma falha aqui não impede o modo desktop de funcionar.
             if let Err(erro) = servidor::iniciar(app.handle()) {
                 eprintln!("Servidor do Auto-cadastro não subiu: {erro}");
+            }
+            // Diagnóstico no stderr: de onde virá o modelo do microfone. O
+            // nome do arquivo é o mesmo na pasta de dados e no bundle; só o
+            // caminho completo diz qual dos dois está em uso (ADR-0008).
+            match diretorios_de_modelos(app.handle()) {
+                Ok(diretorios) => {
+                    let candidatos = transcricao::candidatos_a_modelo(&diretorios);
+                    if candidatos.is_empty() {
+                        eprintln!("Nenhum modelo de transcrição encontrado");
+                    } else {
+                        let lista: Vec<String> = candidatos
+                            .iter()
+                            .map(|caminho| caminho.display().to_string())
+                            .collect();
+                        eprintln!(
+                            "Modelos de transcrição, por precedência: {}",
+                            lista.join(", ")
+                        );
+                    }
+                }
+                Err(erro) => eprintln!("{erro}"),
             }
             Ok(())
         })
