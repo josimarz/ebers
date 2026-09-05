@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Consulta } from "@/db/consultas";
+import type { DadosPaciente } from "@/dominio/paciente";
 import {
   capturaEstaAtiva,
   emitirBloco,
@@ -66,7 +67,10 @@ afterEach(() => {
 });
 
 /** Programa a carga da página: a consulta 3 do paciente 7 (Ana Lima). */
-function carregarConsulta(ajustes: Partial<Consulta> = {}) {
+function carregarConsulta(
+  ajustes: Partial<Consulta> = {},
+  paciente: Partial<DadosPaciente> = {},
+) {
   enfileirarSelect([
     linhaDeConsulta(
       consultaAberta({
@@ -77,7 +81,9 @@ function carregarConsulta(ajustes: Partial<Consulta> = {}) {
       }),
     ),
   ]);
-  enfileirarSelect([linhaDePaciente({ id: 7, ...dadosPacienteValidos() })]);
+  enfileirarSelect([
+    linhaDePaciente({ id: 7, ...dadosPacienteValidos(paciente) }),
+  ]);
 }
 
 async function renderizarPagina() {
@@ -90,6 +96,15 @@ async function renderizarPagina() {
   );
   await act(async () => {});
   return tela;
+}
+
+/** O cartão do cabeçalho da Consulta (spec 2.3): o que envolve o nome do Paciente. */
+function cabecalhoDaConsulta(): HTMLElement {
+  const cabecalho = screen
+    .getByRole("heading", { name: "Ana Lima" })
+    .closest("header");
+  if (cabecalho === null) throw new Error("cabeçalho da Consulta não achado");
+  return cabecalho;
 }
 
 /** user-event dirigindo os timers falsos do teste. */
@@ -118,6 +133,37 @@ test("o cabeçalho traz nome, idade e timer verde; Conteúdo e Notas vêm carreg
   expect(
     screen.getByRole("button", { name: "Finalizar Consulta" }),
   ).toBeInTheDocument();
+});
+
+test("o cabeçalho mostra o Motivo da terapia completo, só para leitura", async () => {
+  const motivo =
+    "Ansiedade no trabalho, crises de choro e dificuldade para dormir desde que mudei de cargo. Quero entender o que está acontecendo comigo antes que afete minha família.";
+  carregarConsulta({}, { motivoTerapia: motivo });
+  await renderizarPagina();
+
+  const cabecalho = cabecalhoDaConsulta();
+  expect(within(cabecalho).getByText("Motivo da terapia")).toBeInTheDocument();
+  // Texto inteiro, sem truncar nem "ver mais": é leitura de referência.
+  expect(within(cabecalho).getByText(motivo)).toBeInTheDocument();
+  expect(
+    within(cabecalho).queryByRole("textbox", { name: "Motivo da terapia" }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(cabecalho).queryByRole("link", { name: /Editar Paciente/ }),
+  ).not.toBeInTheDocument();
+});
+
+test("Paciente sem Motivo da terapia registrado: o cabeçalho avisa e leva à edição do cadastro", async () => {
+  carregarConsulta({}, { motivoTerapia: null });
+  await renderizarPagina();
+
+  const cabecalho = cabecalhoDaConsulta();
+  expect(
+    within(cabecalho).getByText("Motivo da terapia não informado"),
+  ).toBeInTheDocument();
+  expect(
+    within(cabecalho).getByRole("link", { name: "Editar Paciente" }),
+  ).toHaveAttribute("href", "/pacientes/7/editar");
 });
 
 test("as Notas re-renderizam fielmente o HTML salvo", async () => {

@@ -62,6 +62,10 @@ async function preencherCamposObrigatorios(terapeuta: UserEvent) {
     "Sem religião",
   );
   await terapeuta.type(screen.getByLabelText("Telefone 1"), "(11) 91234-5678");
+  await terapeuta.type(
+    screen.getByLabelText("Motivo da terapia"),
+    "Ansiedade no trabalho",
+  );
   await terapeuta.selectOptions(
     screen.getByLabelText("Já fez terapia?"),
     "Não",
@@ -78,6 +82,9 @@ async function preencherCamposObrigatorios(terapeuta: UserEvent) {
 
 const salvar = () => screen.getByRole("button", { name: "Salvar" });
 
+const DICA_DO_TABLET =
+  "Conte com suas palavras. Não precisa ser detalhado, a terapeuta vai conversar sobre isso com você.";
+
 const ultima = <T,>(itens: T[]): T | undefined => itens[itens.length - 1];
 
 test("novo cadastro nasce com o Valor da consulta pré-preenchido e editável", () => {
@@ -89,6 +96,28 @@ test("novo cadastro nasce com o Valor da consulta pré-preenchido e editável", 
   const valor = screen.getByLabelText("Valor da consulta (R$)");
   expect(valor).toHaveValue("250,00");
   expect(valor).toBeEnabled();
+});
+
+test("Motivo da terapia tem seção própria entre Contato e Histórico clínico, obrigatória e sem dica no desktop", () => {
+  renderizarFormulario("/pacientes/novo");
+
+  expect(
+    screen
+      .getAllByRole("heading", { level: 2 })
+      .map((titulo) => titulo.textContent),
+  ).toEqual([
+    "Dados pessoais",
+    "Responsável legal",
+    "Contato",
+    "Motivo da terapia",
+    "Histórico clínico",
+    "Consulta",
+  ]);
+  const motivo = screen.getByLabelText("Motivo da terapia");
+  // Texto livre multilinha, nas palavras do Paciente — nunca uma lista.
+  expect(motivo.tagName).toBe("TEXTAREA");
+  expect(motivo).toBeRequired();
+  expect(screen.queryByText(DICA_DO_TABLET)).not.toBeInTheDocument();
 });
 
 test("menor de 18 anos passa a exigir os três campos do Responsável legal imediatamente", () => {
@@ -315,7 +344,43 @@ test("cadastro válido persiste o paciente e volta à listagem", async () => {
   expect(insercao.sql).toMatch(/insert into "pacientes"/i);
   expect(insercao.valores).toContain("Ana Lima");
   expect(insercao.valores).toContain("52998224725");
+  expect(insercao.valores).toContain("Ansiedade no trabalho");
   expect(insercao.valores).toContain(25000);
+});
+
+test("Paciente cadastrado antes do Motivo da terapia abre com o campo vazio e só salva depois de preenchê-lo", async () => {
+  const terapeuta = userEvent.setup();
+  enfileirarSelect([
+    linhaDePaciente({
+      id: 7,
+      ...dadosPacienteValidos({ motivoTerapia: null }),
+    }),
+  ]);
+  renderizarFormulario("/pacientes/7/editar");
+
+  expect(
+    await screen.findByRole("heading", { name: "Editar Paciente" }),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("Motivo da terapia")).toHaveValue("");
+
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("Campo obrigatório")).toBeInTheDocument();
+  expect(screen.getByLabelText("Motivo da terapia")).toBeInvalid();
+  // Só a carga do paciente; nenhuma gravação.
+  expect(chamadas).toHaveLength(1);
+
+  await terapeuta.type(
+    screen.getByLabelText("Motivo da terapia"),
+    "Luto recente",
+  );
+  enfileirarSelect([{ total: 0 }]);
+  await terapeuta.click(salvar());
+
+  expect(await screen.findByText("Listagem de pacientes")).toBeInTheDocument();
+  const atualizacao = ultima(chamadas);
+  expect(atualizacao?.sql).toMatch(/update "pacientes" set/i);
+  expect(atualizacao?.valores).toContain("Luto recente");
 });
 
 test("edição carrega o paciente, mostra o CPF com máscara e salva a atualização", async () => {

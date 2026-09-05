@@ -167,7 +167,7 @@ Estados obrigatórios: hover, `focus-visible` (anel `ring-3 ring-ring/50`),
 `active` (desce 1px), `disabled` (50% de opacidade, sem ponteiro),
 `aria-invalid`. Ícone sempre antes do rótulo, `size-4`.
 
-### 3.4 Campos (`ui/input.tsx`, `ui/select-nativo.tsx`)
+### 3.4 Campos (`ui/input.tsx`, `ui/textarea.tsx`, `ui/select-nativo.tsx`)
 
 - `h-8`, `bg-glass-fill`, contorno `--input` (3:1 sobre o cartão), hover
   escurece o contorno, foco = contorno `--ring` + anel, erro = contorno e anel
@@ -180,7 +180,12 @@ Estados obrigatórios: hover, `focus-visible` (anel `ring-3 ring-ring/50`),
   `[data-slot="select-nativo"]`); a lista aberta continua nativa. As classes
   do select **não** incluem `read-only:` — `:read-only` casa com todo
   `<select>`.
-- Rótulo `text-sm font-medium`; asterisco vermelho fora do `<label>`.
+- O textarea (texto livre multilinha, como o Motivo da terapia) usa as
+  mesmas classes do input — a única exceção ao `h-8`: `min-h-28`, esticável
+  na vertical (`resize-y`), `py-2 leading-relaxed`.
+- Rótulo `text-sm font-medium`; asterisco vermelho fora do `<label>`. Dica
+  `text-xs text-muted-foreground` abaixo do campo, ligada ao controle por
+  `aria-describedby` junto com o erro.
 
 ### 3.5 Tabelas (`ui/table.tsx`)
 

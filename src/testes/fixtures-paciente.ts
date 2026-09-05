@@ -22,6 +22,7 @@ export function dadosPacienteValidos(
     telefone1: "(11) 91234-5678",
     telefone2: null,
     email: "ana@exemplo.com",
+    motivoTerapia: "Ansiedade no trabalho, crises de choro",
     jaFezTerapia: false,
     quandoFezTerapia: null,
     tomaMedicamento: false,

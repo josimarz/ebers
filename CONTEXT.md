@@ -17,6 +17,10 @@ _Evitar_: cliente, usuário
 **Responsável legal**:
 Adulto que responde por um Paciente menor de 18 anos. Obrigatório para menores; opcional para os demais.
 
+**Motivo da terapia**:
+O que o Paciente relata, no próprio cadastro, como razão de ter procurado terapia. Nasce no cadastro, antes de qualquer Consulta; a Terapeuta pode revisá-lo depois.
+_Evitar_: motivo da consulta (colide com Consulta), queixa, demanda, motivo da busca
+
 **Auto-cadastro**:
 Preenchimento do próprio cadastro pelo Paciente no tablet do consultório. Só cria Pacientes — nunca edita.
 _Evitar_: cadastro remoto, pré-cadastro

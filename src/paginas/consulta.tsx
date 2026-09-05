@@ -1,6 +1,6 @@
 import { Mic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { AvisoErro } from "@/components/aviso";
 import { BotaoMicrofone } from "@/components/botao-microfone";
 import { EditorNotas } from "@/components/editor-notas";
@@ -179,6 +179,7 @@ export function PaginaConsulta() {
             <Button onClick={finalizar}>Finalizar Consulta</Button>
           )}
         </div>
+        <MotivoDaTerapia paciente={paciente} />
       </header>
 
       {erroDaAcao !== null && <AvisoErro>{erroDaAcao}</AvisoErro>}
@@ -200,6 +201,38 @@ export function PaginaConsulta() {
         />
       </div>
     </section>
+  );
+}
+
+/**
+ * Motivo da terapia no cabeçalho (spec 2.3): leitura de referência durante o
+ * atendimento — texto completo, sem truncar; editar é em "Editar Paciente".
+ * Paciente cadastrado antes do campo existir (issue #30) não tem motivo: o
+ * aviso leva direto ao cadastro, onde o campo passou a ser obrigatório.
+ */
+function MotivoDaTerapia({ paciente }: { paciente: Paciente }) {
+  const motivo = paciente.motivoTerapia?.trim() ?? "";
+  return (
+    <div className="flex basis-full flex-col gap-1 border-t border-border/60 pt-4">
+      {motivo === "" ? (
+        <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
+          <span>Motivo da terapia não informado</span>
+          <Link
+            to={`/pacientes/${paciente.id}/editar`}
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            Editar Paciente
+          </Link>
+        </p>
+      ) : (
+        <>
+          <p className="text-sm font-semibold">Motivo da terapia</p>
+          <p className="whitespace-pre-line text-sm leading-relaxed">
+            {motivo}
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 

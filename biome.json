@@ -45,6 +45,16 @@
   },
   "overrides": [
     {
+      "includes": ["src-tauri/icons/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/components/ui/**", "src/hooks/use-mobile.ts"],
       "linter": {
         "rules": {

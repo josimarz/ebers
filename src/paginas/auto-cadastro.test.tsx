@@ -77,6 +77,10 @@ async function preencherCamposObrigatorios(paciente: UserEvent) {
     "Sem religião",
   );
   await paciente.type(screen.getByLabelText("Telefone 1"), "(11) 91234-5678");
+  await paciente.type(
+    screen.getByLabelText("Motivo da terapia"),
+    "Ansiedade no trabalho",
+  );
   await paciente.selectOptions(screen.getByLabelText("Já fez terapia?"), "Não");
   await paciente.selectOptions(
     screen.getByLabelText("Toma algum medicamento?"),
@@ -105,6 +109,7 @@ test("cadastro enviado vai à rota REST, confirma e volta em branco para o próx
   const corpo = JSON.parse(String(requisicoesHttp[0].corpo));
   expect(corpo.nomeCompleto).toBe("Ana Lima");
   expect(corpo.cpf).toBe("52998224725");
+  expect(corpo.motivoTerapia).toBe("Ansiedade no trabalho");
   expect(chamadas).toHaveLength(0);
   expect(chamadasDeComando).toHaveLength(0);
 
@@ -130,6 +135,23 @@ test("CPF já cadastrado orienta a chamar a terapeuta e preserva o que foi digit
   // Nada foi criado nem alterado; o formulário continua com os dados.
   expect(screen.queryByText("Cadastro recebido!")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Nome completo")).toHaveValue("Ana Lima");
+});
+
+test("o Motivo da terapia é obrigatório no tablet e traz a dica para o Paciente", async () => {
+  const paciente = userEvent.setup();
+  renderizarAutoCadastro();
+
+  const motivo = screen.getByLabelText("Motivo da terapia");
+  expect(motivo).toBeRequired();
+  expect(motivo).toHaveAccessibleDescription(
+    "Conte com suas palavras. Não precisa ser detalhado, a terapeuta vai conversar sobre isso com você.",
+  );
+
+  await paciente.click(enviar());
+
+  expect(motivo).toBeInvalid();
+  expect(motivo).toHaveAccessibleDescription(/Campo obrigatório/);
+  expect(requisicoesHttp).toHaveLength(0);
 });
 
 test("as regras reativas valem no navegador: menor de 18 exige o Responsável legal", async () => {

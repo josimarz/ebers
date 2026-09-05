@@ -78,6 +78,9 @@ pub struct NovoPacienteAutoCadastro {
     telefone_1: String,
     telefone_2: Option<String>,
     email: Option<String>,
+    /// Motivo da terapia (CONTEXT.md), nas palavras do Paciente. Obrigatório
+    /// (issue #30): `String`, não `Option`, para o serde recusar a ausência.
+    motivo_terapia: String,
     ja_fez_terapia: bool,
     quando_fez_terapia: Option<String>,
     toma_medicamento: bool,
@@ -223,6 +226,7 @@ fn validar(novo: &NovoPacienteAutoCadastro) -> Result<(), String> {
         ("genero", &novo.genero),
         ("religiao", &novo.religiao),
         ("telefone1", &novo.telefone_1),
+        ("motivoTerapia", &novo.motivo_terapia),
     ];
     for (campo, valor) in obrigatorios {
         if valor.trim().is_empty() {
@@ -295,13 +299,13 @@ fn inserir_paciente(
         "INSERT INTO pacientes (
             nome_completo, foto, data_nascimento, genero, cpf, rg, religiao,
             responsavel_legal, email_responsavel_legal, cpf_responsavel_legal,
-            telefone_1, telefone_2, email,
+            telefone_1, telefone_2, email, motivo_terapia,
             ja_fez_terapia, quando_fez_terapia,
             toma_medicamento, toma_medicamento_desde_quando, nomes_medicamentos,
             ja_foi_hospitalizado, quando_foi_hospitalizado, razao_hospitalizacao,
             valor_consulta_centavos
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-                  ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+                  ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         rusqlite::params![
             novo.nome_completo,
             novo.foto,
@@ -316,6 +320,7 @@ fn inserir_paciente(
             novo.telefone_1,
             novo.telefone_2,
             novo.email,
+            novo.motivo_terapia.trim(),
             novo.ja_fez_terapia,
             novo.quando_fez_terapia,
             novo.toma_medicamento,
@@ -376,6 +381,7 @@ mod testes {
             "telefone1": "(11) 91234-5678",
             "telefone2": null,
             "email": null,
+            "motivoTerapia": "Ansiedade no trabalho, crises de choro",
             "jaFezTerapia": false,
             "quandoFezTerapia": null,
             "tomaMedicamento": false,
@@ -435,22 +441,38 @@ mod testes {
         // aplicado automaticamente; campos ocultos ficam vazios).
         let conexao = rusqlite::Connection::open(&estado.caminho_banco)
             .expect("abrir o SQLite de teste");
-        let (nome, valor, periodicidade, dia): (String, i64, Option<String>, Option<String>) =
-            conexao
-                .query_row(
-                    "SELECT nome_completo, valor_consulta_centavos,
-                            periodicidade, dia_semana_consulta
-                     FROM pacientes WHERE cpf = '52998224725'",
-                    [],
-                    |linha| {
-                        Ok((linha.get(0)?, linha.get(1)?, linha.get(2)?, linha.get(3)?))
-                    },
-                )
-                .expect("consultar o paciente criado");
+        let (nome, valor, periodicidade, dia, motivo): (
+            String,
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = conexao
+            .query_row(
+                "SELECT nome_completo, valor_consulta_centavos,
+                        periodicidade, dia_semana_consulta, motivo_terapia
+                 FROM pacientes WHERE cpf = '52998224725'",
+                [],
+                |linha| {
+                    Ok((
+                        linha.get(0)?,
+                        linha.get(1)?,
+                        linha.get(2)?,
+                        linha.get(3)?,
+                        linha.get(4)?,
+                    ))
+                },
+            )
+            .expect("consultar o paciente criado");
         assert_eq!(nome, "Ana Lima");
         assert_eq!(valor, 25000);
         assert_eq!(periodicidade, None);
         assert_eq!(dia, None);
+        // O Motivo da terapia é o que o Paciente contou no tablet (issue #30).
+        assert_eq!(
+            motivo.as_deref(),
+            Some("Ansiedade no trabalho, crises de choro")
+        );
     }
 
     #[tokio::test]
@@ -533,6 +555,7 @@ mod testes {
             "genero",
             "religiao",
             "telefone1",
+            "motivoTerapia",
         ] {
             let mut cadastro = cadastro_valido();
             cadastro[campo] = json!("   ");
@@ -545,6 +568,23 @@ mod testes {
                 "{campo} em branco deveria ser recusado"
             );
         }
+        assert_eq!(pacientes_gravados(&estado), 0);
+    }
+
+    #[tokio::test]
+    async fn cadastro_sem_o_motivo_da_terapia_e_recusado_sem_gravar() {
+        let (_pasta, estado) = estado_de_teste();
+        // Um formulário anterior ao campo (ou fora da SPA) nem manda a chave:
+        // o Motivo da terapia é obrigatório também nesta fronteira.
+        let mut cadastro = cadastro_valido();
+        cadastro
+            .as_object_mut()
+            .expect("cadastro é um objeto JSON")
+            .remove("motivoTerapia");
+
+        let status = cadastrar(&estado, &cadastro).await;
+
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(pacientes_gravados(&estado), 0);
     }
 

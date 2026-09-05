@@ -27,6 +27,7 @@ function formularioValido(
     telefone1: "(11) 91234-5678",
     telefone2: "",
     email: "ana@exemplo.com",
+    motivoTerapia: "Ansiedade no trabalho, crises de choro",
     jaFezTerapia: "Não",
     quandoFezTerapia: "",
     tomaMedicamento: "Não",
@@ -55,6 +56,7 @@ test("campos obrigatórios vazios são apontados", () => {
       cpf: "",
       religiao: "",
       telefone1: "",
+      motivoTerapia: "   ",
       jaFezTerapia: "",
       tomaMedicamento: "",
       jaFoiHospitalizado: "",
@@ -70,6 +72,7 @@ test("campos obrigatórios vazios são apontados", () => {
     "cpf",
     "religiao",
     "telefone1",
+    "motivoTerapia",
     "jaFezTerapia",
     "tomaMedicamento",
     "jaFoiHospitalizado",
@@ -235,6 +238,7 @@ test("converte o formulário validado no registro do banco", () => {
       quandoFezTerapia: "Entre 2018 e 2020",
       rg: "",
       telefone2: "",
+      motivoTerapia: "  Ansiedade no trabalho, crises de choro  ",
     }),
     "foto-1.jpg",
   );
@@ -253,6 +257,7 @@ test("converte o formulário validado no registro do banco", () => {
     telefone1: "(11) 91234-5678",
     telefone2: null,
     email: "ana@exemplo.com",
+    motivoTerapia: "Ansiedade no trabalho, crises de choro",
     jaFezTerapia: true,
     quandoFezTerapia: "Entre 2018 e 2020",
     tomaMedicamento: false,
@@ -341,4 +346,19 @@ test("registro do banco volta ao formulário para edição", () => {
   const volta = dadosParaFormulario(formularioParaDados(ida, "foto-1.jpg"));
 
   expect(volta).toEqual(ida);
+});
+
+test("Paciente gravado antes do Motivo da terapia abre com o campo vazio", () => {
+  const antigo = {
+    ...formularioParaDados(formularioValido(), null),
+    motivoTerapia: null,
+  };
+
+  const formulario = dadosParaFormulario(antigo);
+
+  expect(formulario.motivoTerapia).toBe("");
+  // Vazio é vazio: a Terapeuta precisa preencher para salvar.
+  expect(validarFormularioPaciente(formulario, HOJE).motivoTerapia).toBe(
+    "Campo obrigatório",
+  );
 });
