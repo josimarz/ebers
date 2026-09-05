@@ -21,8 +21,16 @@ run = "npm run lint"
 description = "Gera migração SQL a partir do schema Drizzle (src/db/schema.ts)"
 run = "npx drizzle-kit generate"
 
+[tasks.modelo]
+description = "Baixa o modelo Whisper embutido no app (ggml-small.bin) para src-tauri/recursos/modelos/"
+# Uma vez só: com o arquivo íntegro no lugar, a task apenas confere o SHA-256
+# (~2 s) e não toca em nada. O modelo fica fora do git e entra no bundle pelo
+# `bundle.resources` do tauri.conf.json (ADR-0008).
+run = "scripts/baixar-modelo.sh"
+
 [tasks."build:macos"]
 description = "Empacota o app para macOS como binário universal (Intel + Apple Silicon)"
+depends = ["modelo"]
 # Universal e não só a arquitetura de quem constrói: cada fatia compila com o
 # próprio cfg, então a arm64 sai com o Metal e a x86_64 sem ele (ADR-0006).
 # O PATH antepõe scripts/shims: no macOS 26 o `hdiutil detach` da etapa do DMG

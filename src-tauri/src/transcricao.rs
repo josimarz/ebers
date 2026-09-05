@@ -2,9 +2,11 @@
 //!
 //! O frontend capta o áudio, junta em trechos e manda os bytes crus para cá;
 //! o whisper.cpp (via whisper-rs) transcreve 100% local, em pt-BR. O modelo
-//! ggml vive no diretório `modelos/`, ao lado do `ebers.db` — baixado uma vez
-//! pela terapeuta (docs/operacao.md), nunca embutido no instalador.
+//! ggml vem embutido no app, em `modelos/` dentro dos recursos do bundle
+//! (ADR-0008); um modelo posto em `modelos/` ao lado do `ebers.db` tem
+//! precedência — a exceção para a máquina que não acompanha o `small`.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -12,12 +14,14 @@ use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
 };
 
-/// Subdiretório dos modelos Whisper dentro do diretório de dados do app.
+/// Subdiretório dos modelos Whisper — tanto na pasta de dados do app quanto
+/// nos recursos do bundle.
 pub const DIRETORIO_MODELOS: &str = "modelos";
 
-/// Modelos aceitos, do melhor para o mais leve — a terapeuta baixa o que o
-/// hardware dela comporta (docs/operacao.md); havendo mais de um, prevalece a
-/// qualidade.
+/// Modelos aceitos, do melhor para o mais leve. O `small` vai embutido no app
+/// (ADR-0008); um mais leve posto em `modelos/` da pasta de dados sobrepõe o
+/// embutido (README, seção Dados). Havendo mais de um no mesmo diretório,
+/// prevalece a qualidade.
 pub const MODELOS_POR_QUALIDADE: [&str; 3] =
     ["ggml-small.bin", "ggml-base.bin", "ggml-tiny.bin"];
 
@@ -48,6 +52,24 @@ pub fn localizar_modelo(diretorio: &Path) -> Option<PathBuf> {
         .iter()
         .map(|nome| diretorio.join(nome))
         .find(|caminho| caminho.is_file())
+}
+
+/// O melhor modelo de cada diretório, na ordem em que os diretórios vieram.
+/// Essa ordem é de precedência, não de qualidade: um `base` posto de
+/// propósito em `modelos/` da pasta de dados vem antes do `small` embutido
+/// no app (ADR-0008). Os seguintes são reserva: se o primeiro não carregar
+/// (arquivo truncado por um download interrompido, por exemplo), a
+/// transcrição tenta o próximo em vez de ficar sem modelo.
+pub fn candidatos_a_modelo(diretorios: &[PathBuf]) -> Vec<PathBuf> {
+    diretorios
+        .iter()
+        .filter_map(|diretorio| localizar_modelo(diretorio))
+        .collect()
+}
+
+/// O modelo de maior precedência entre os diretórios, se houver algum.
+pub fn localizar_modelo_entre(diretorios: &[PathBuf]) -> Option<PathBuf> {
+    candidatos_a_modelo(diretorios).into_iter().next()
 }
 
 /// Decodifica o corpo bruto do invoke: amostras f32 little-endian.
@@ -84,12 +106,20 @@ pub fn com_duracao_minima(mut amostras: Vec<f32>) -> Vec<f32> {
 }
 
 /// Estado gerenciado pelo Tauri: o modelo Whisper carregado. Carregar custa
-/// segundos e centenas de MB, então acontece uma vez — no primeiro trecho — e
-/// o contexto vale pela execução inteira do app. Se a terapeuta trocar o
-/// arquivo de modelo, o caminho muda e o contexto é recarregado.
+/// segundos e centenas de MB, então o contexto do último caminho que carregou
+/// vale pela execução inteira do app — no caso normal, um único carregamento,
+/// no primeiro trecho. Se o desenvolvedor trocar o arquivo em `modelos/` da
+/// pasta de dados, o caminho muda e o contexto é recarregado.
 #[derive(Default)]
 pub struct Transcritor {
     carregado: Mutex<Option<ModeloCarregado>>,
+    /// Caminhos que não carregaram nesta execução. O whisper.cpp não libera
+    /// o que alocou numa carga que falha, e `transcrever_audio` (lib.rs) pede
+    /// os candidatos em ordem a cada trecho: sem isto, um modelo truncado na
+    /// pasta de dados seria reaberto — e vazaria memória — a cada 12–28 s
+    /// antes de a reserva embutida responder. Trocar o arquivo avariado só
+    /// vale depois de reabrir o app.
+    rejeitados: Mutex<HashSet<PathBuf>>,
 }
 
 struct ModeloCarregado {
@@ -109,13 +139,33 @@ impl Transcritor {
                 return Ok(Arc::clone(&modelo.contexto));
             }
         }
+        let mut rejeitados = self
+            .rejeitados
+            .lock()
+            .map_err(|_| "Transcritor indisponível".to_string())?;
+        if rejeitados.contains(caminho) {
+            return Err(format!(
+                "Modelo de transcrição rejeitado nesta execução: {}",
+                caminho.display()
+            ));
+        }
         let mut parametros = WhisperContextParameters::default();
         parametros.use_gpu(USAR_GPU);
-        let contexto = Arc::new(
-            WhisperContext::new_with_params(caminho, parametros).map_err(|erro| {
-                format!("Não foi possível carregar o modelo de transcrição: {erro}")
-            })?,
-        );
+        let contexto = match WhisperContext::new_with_params(caminho, parametros) {
+            Ok(contexto) => Arc::new(contexto),
+            Err(erro) => {
+                rejeitados.insert(caminho.to_path_buf());
+                let mensagem = format!(
+                    "Não foi possível carregar o modelo de transcrição {}: {erro}",
+                    caminho.display()
+                );
+                eprintln!("{mensagem}");
+                return Err(mensagem);
+            }
+        };
+        // O nome do arquivo é o mesmo na pasta de dados e no bundle; só o
+        // caminho completo diz qual dos dois entrou em uso.
+        eprintln!("Modelo de transcrição carregado: {}", caminho.display());
         *carregado = Some(ModeloCarregado {
             caminho: caminho.to_path_buf(),
             contexto: Arc::clone(&contexto),
@@ -211,6 +261,77 @@ mod testes {
         criar_modelo(pasta.path(), "ggml-large.bin");
 
         assert_eq!(localizar_modelo(pasta.path()), None);
+    }
+
+    #[test]
+    fn entre_diretorios_vale_a_ordem_e_nao_a_qualidade() {
+        let dados = diretorio_de_teste();
+        let embutido = diretorio_de_teste();
+        criar_modelo(dados.path(), "ggml-base.bin");
+        criar_modelo(embutido.path(), "ggml-small.bin");
+
+        assert_eq!(
+            localizar_modelo_entre(&[dados.path().to_path_buf(), embutido.path().to_path_buf()]),
+            Some(dados.path().join("ggml-base.bin"))
+        );
+    }
+
+    #[test]
+    fn sem_modelo_na_pasta_de_dados_vale_o_embutido() {
+        let dados = diretorio_de_teste();
+        let embutido = diretorio_de_teste();
+        criar_modelo(embutido.path(), "ggml-small.bin");
+
+        assert_eq!(
+            // A pasta de dados pode nem ter `modelos/` — o caso normal.
+            localizar_modelo_entre(&[dados.path().join("modelos"), embutido.path().to_path_buf()]),
+            Some(embutido.path().join("ggml-small.bin"))
+        );
+    }
+
+    #[test]
+    fn sem_modelo_em_lugar_nenhum_nao_ha_o_que_localizar() {
+        let dados = diretorio_de_teste();
+        let embutido = diretorio_de_teste();
+
+        assert_eq!(
+            localizar_modelo_entre(&[dados.path().to_path_buf(), embutido.path().to_path_buf()]),
+            None
+        );
+        assert_eq!(localizar_modelo_entre(&[]), None);
+    }
+
+    #[test]
+    fn os_candidatos_trazem_um_modelo_por_diretorio_na_ordem_de_precedencia() {
+        let dados = diretorio_de_teste();
+        let embutido = diretorio_de_teste();
+        criar_modelo(dados.path(), "ggml-tiny.bin");
+        criar_modelo(dados.path(), "ggml-base.bin");
+        criar_modelo(embutido.path(), "ggml-small.bin");
+
+        assert_eq!(
+            candidatos_a_modelo(&[dados.path().to_path_buf(), embutido.path().to_path_buf()]),
+            vec![
+                dados.path().join("ggml-base.bin"),
+                embutido.path().join("ggml-small.bin")
+            ]
+        );
+    }
+
+    /// Um arquivo que não é um modelo ggml falha na carga (o whisper.cpp
+    /// rejeita o cabeçalho) e, daí em diante, é recusado sem ser reaberto.
+    #[test]
+    fn um_modelo_que_nao_carrega_e_rejeitado_ate_o_fim_da_execucao() {
+        let pasta = diretorio_de_teste();
+        criar_modelo(pasta.path(), "ggml-small.bin");
+        let caminho = pasta.path().join("ggml-small.bin");
+        let transcritor = Transcritor::default();
+
+        let primeira = transcritor.contexto(&caminho).unwrap_err();
+        assert!(primeira.starts_with("Não foi possível carregar"), "{primeira}");
+
+        let segunda = transcritor.contexto(&caminho).unwrap_err();
+        assert!(segunda.starts_with("Modelo de transcrição rejeitado"), "{segunda}");
     }
 
     /// Regressão: a GPU só entra onde o Metal é confiável. Num Mac Intel a

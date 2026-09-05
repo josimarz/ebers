@@ -412,6 +412,7 @@ Decisão em [ADR-0004](./adr/0004-transcricao-offline-com-whisper.md).
 | Item | Valor |
 |---|---|
 | Modelo | OpenAI Whisper (via whisper.cpp) |
+| Arquivo ggml | `small`, embutido no app ([ADR-0008](./adr/0008-modelo-whisper-embutido-no-instalador.md)); um modelo em `modelos/` da pasta de dados tem precedência |
 | Crate Rust | `whisper-rs` |
 | Execução | 100% local/offline |
 | Idioma | pt-BR |

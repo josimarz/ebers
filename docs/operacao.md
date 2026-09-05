@@ -32,29 +32,14 @@ restritas ao app no computador
 O botão "Ligar microfone" da página da consulta transcreve a fala direto no
 campo Conteúdo — todo o processamento acontece no próprio computador, nenhum
 áudio sai da máquina
-([ADR-0004](./adr/0004-transcricao-offline-com-whisper.md)). Antes do
-primeiro uso, é preciso baixar o modelo de voz, uma única vez:
-
-1. Baixe **um** dos modelos abaixo. Comece pelo `small`: ele erra menos da
-   metade das palavras que o `base` e ainda transcreve mais rápido do que se
-   fala, mesmo num computador de 2019. Só desça na tabela se a máquina não
-   acompanhar.
-
-   | Modelo | Arquivo | Tamanho | Indicado para |
-   | --- | --- | --- | --- |
-   | small | [`ggml-small.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin) | ~466 MB | a escolha recomendada, bem melhor em português |
-   | base | [`ggml-base.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin) | ~142 MB | máquinas mais modestas, com perda visível de precisão |
-   | tiny | [`ggml-tiny.bin`](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin) | ~75 MB | último recurso, só para computadores antigos |
-
-2. Crie a subpasta `modelos` dentro da pasta de dados do Ebers (tabela em
-   "Onde ficam os dados", abaixo) e mova o arquivo baixado para lá, **sem
-   renomear**.
-3. Pronto: na próxima consulta, ligue o microfone e fale normalmente. Se
-   houver mais de um modelo na pasta, o Ebers usa o de melhor qualidade.
+([ADR-0004](./adr/0004-transcricao-offline-com-whisper.md)). Não há nada para
+instalar nem baixar para a transcrição: o modelo de voz dela já vem dentro do
+Ebers ([ADR-0008](./adr/0008-modelo-whisper-embutido-no-instalador.md)).
 
 > Na primeira vez, o sistema pergunta se o Ebers pode usar o microfone —
-> permita. Se o botão avisar "Modelo de transcrição não instalado", confira o
-> nome e o lugar do arquivo.
+> permita. Se o botão avisar "Modelo de transcrição não encontrado", a
+> instalação ficou incompleta: peça a quem instalou o Ebers para instalá-lo
+> de novo.
 
 ### Prévia: o texto ao vivo (só no macOS)
 
@@ -70,7 +55,8 @@ precisa estar preparado para português do Brasil:
 
 1. Abra **Ajustes do Sistema › Teclado** e, em **Ditado**, ligue o Ditado.
 2. Em **Idiomas** do Ditado, adicione **Português (Brasil)** e aguarde o
-   download do modelo de voz (uma vez, com internet).
+   download do pacote de português (uma vez, com internet). Esse pacote é do
+   próprio macOS, separado do Ebers.
 3. Ao ligar o microfone pela primeira vez depois disso, o sistema pergunta se
    o Ebers pode usar o **Reconhecimento de Fala** — permita. É uma permissão
    separada da do microfone.
@@ -96,9 +82,10 @@ computador — o banco de dados (`ebers.db`) e as fotos de perfil (subpasta
 Dentro dela:
 
 - `ebers.db` — o banco com todos os cadastros, consultas e anotações;
-- `fotos/` — as fotos de perfil dos pacientes;
-- `modelos/` — o modelo de voz da transcrição. Pode ficar fora do backup:
-  se perder, é só baixar de novo (seção acima).
+- `fotos/` — as fotos de perfil dos pacientes.
+
+Qualquer outra pasta que apareça ali (por exemplo `modelos/`) não precisa ir
+no backup.
 
 ### Como fazer o backup
 

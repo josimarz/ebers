@@ -30,7 +30,7 @@ import {
 } from "@/lib/captura-audio";
 
 const AVISO_SEM_MODELO =
-  "Modelo de transcrição não instalado — veja o guia de operação.";
+  "Modelo de transcrição não encontrado — a instalação precisa ser refeita.";
 const AVISO_SEM_MICROFONE = "Não foi possível acessar o microfone.";
 const AVISO_TRANSCRICAO_FALHOU = "A transcrição falhou — microfone desligado.";
 const AVISO_PREVIA_INDISPONIVEL =
