@@ -174,9 +174,92 @@ impl Transcritor {
     }
 }
 
+/// Como decodificar: gulosa (a de hoje) ou busca em feixe, o padrão da
+/// implementação de referência da OpenAI e o usado nos números publicados.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Estrategia {
+    Gulosa,
+    Feixe(i32),
+}
+
+/// O que varia numa transcrição além do áudio. A medição da #34
+/// (`examples/medir.rs`) compara as combinações; o app usa [`Opcoes::do_app`].
+#[derive(Clone, Debug)]
+pub struct Opcoes {
+    pub estrategia: Estrategia,
+    /// Prompt fixo do Trecho. Só na medição (`examples/medir.rs`): com nome
+    /// e frase de estilo, a #34 mediu piora em todas as condições — o texto
+    /// do prompt vaza para a transcrição. E nunca o texto já transcrito: a
+    /// #14 mostrou que isso carrega erros adiante.
+    pub prompt: Option<String>,
+    /// Caminho do modelo Silero para o VAD interno do whisper.cpp, que
+    /// filtra o não-fala dentro do trecho antes do encoder.
+    pub vad_interno: Option<PathBuf>,
+    /// Threads do whisper.cpp (nulo = o padrão dele, 4).
+    pub threads: Option<i32>,
+    /// Ganho automático no trecho antes do modelo: o log-mel do whisper.cpp
+    /// não é invariante ao nível (a constante `(x + 4) / 4` é absoluta), e
+    /// voz a −50 dBFS cai numa faixa de valores que o modelo pouco viu.
+    pub ganho: bool,
+}
+
+/// Pico a que um trecho quieto é levado antes do modelo (−6 dBFS); nunca
+/// atenua, e o ganho é limitado a 30 dB para não amplificar silêncio.
+const PICO_ALVO: f32 = 0.5;
+const GANHO_MAXIMO: f32 = 31.6;
+
+/// Leva o áudio ao pico alvo quando está abaixo dele.
+pub fn com_ganho(mut amostras: Vec<f32>) -> Vec<f32> {
+    let pico = amostras.iter().fold(0.0f32, |maior, a| maior.max(a.abs()));
+    if pico > 0.0 && pico < PICO_ALVO {
+        let ganho = (PICO_ALVO / pico).min(GANHO_MAXIMO);
+        for amostra in &mut amostras {
+            *amostra *= ganho;
+        }
+    }
+    amostras
+}
+
+impl Opcoes {
+    /// A configuração do app, escolhida pela medição da #34
+    /// (docs/pesquisa/2026-09-transcricao-a-distancia.md): decodificação
+    /// gulosa (a busca em feixe saiu pior e mais lenta), sem prompt (piorou
+    /// em todas as condições), sem ganho automático antes do modelo (piorou
+    /// na voz baixa a distância) e sem o VAD interno do whisper.cpp (não
+    /// medido).
+    pub fn do_app() -> Self {
+        Self {
+            estrategia: Estrategia::Gulosa,
+            prompt: None,
+            vad_interno: None,
+            threads: None,
+            ganho: false,
+        }
+    }
+
+}
+
+/// O prompt que a medição da #34 testou (e rejeitou): um nome de Paciente
+/// para a grafia e uma frase curta em estilo de transcrição para o estilo,
+/// como o guia de prompting da OpenAI sugere.
+pub fn prompt_medido(paciente: &str) -> String {
+    format!("Consulta de psicoterapia com {paciente}. Conversa sobre a semana, a família, o trabalho e como tem se sentido.")
+}
+
 /// Transcreve um trecho de áudio (16 kHz mono) em pt-BR e devolve o texto.
-pub fn transcrever(contexto: &WhisperContext, amostras: &[f32]) -> Result<String, String> {
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+pub fn transcrever(
+    contexto: &WhisperContext,
+    amostras: &[f32],
+    opcoes: &Opcoes,
+) -> Result<String, String> {
+    let estrategia = match opcoes.estrategia {
+        Estrategia::Gulosa => SamplingStrategy::Greedy { best_of: 1 },
+        Estrategia::Feixe(beam_size) => SamplingStrategy::BeamSearch {
+            beam_size,
+            patience: -1.0,
+        },
+    };
+    let mut params = FullParams::new(estrategia);
     params.set_language(Some("pt"));
     params.set_translate(false);
     params.set_print_special(false);
@@ -186,7 +269,28 @@ pub fn transcrever(contexto: &WhisperContext, amostras: &[f32]) -> Result<String
     params.set_suppress_blank(true);
     // Sem tokens de não-fala ("[MÚSICA]" etc.) no Conteúdo da Consulta.
     params.set_suppress_nst(true);
+    if let Some(threads) = opcoes.threads {
+        params.set_n_threads(threads);
+    }
+    if let Some(prompt) = opcoes.prompt.as_deref() {
+        params.set_initial_prompt(prompt);
+    }
+    let caminho_vad = opcoes
+        .vad_interno
+        .as_ref()
+        .map(|caminho| caminho.to_string_lossy().into_owned());
+    if let Some(caminho) = caminho_vad.as_deref() {
+        params.set_vad_model_path(Some(caminho));
+        params.enable_vad(true);
+    }
 
+    let ajustadas;
+    let amostras = if opcoes.ganho {
+        ajustadas = com_ganho(amostras.to_vec());
+        ajustadas.as_slice()
+    } else {
+        amostras
+    };
     let mut estado = contexto
         .create_state()
         .map_err(|erro| format!("Não foi possível preparar a transcrição: {erro}"))?;
@@ -363,6 +467,20 @@ mod testes {
     #[test]
     fn corpo_com_tamanho_desalinhado_e_rejeitado() {
         assert!(amostras_do_corpo(&[0, 0, 0, 0, 0, 0]).is_err());
+    }
+
+    #[test]
+    fn o_ganho_leva_o_trecho_quieto_ao_pico_alvo_e_nao_mexe_no_trecho_alto() {
+        let quieto = com_ganho(vec![0.01, -0.02, 0.005]);
+        assert!((quieto[1] + 0.5).abs() < 1e-6, "{quieto:?}");
+        assert!((quieto[0] - 0.25).abs() < 1e-6);
+
+        // Já no pico alvo ou acima: sai como entrou.
+        assert_eq!(com_ganho(vec![0.5, -0.9]), vec![0.5, -0.9]);
+        // Silêncio quase digital: no máximo 30 dB, nunca vira ruído alto.
+        let silencio = com_ganho(vec![0.0001; 4]);
+        assert!(silencio[0] < 0.004, "{silencio:?}");
+        assert_eq!(com_ganho(vec![0.0; 3]), vec![0.0; 3]);
     }
 
     #[test]

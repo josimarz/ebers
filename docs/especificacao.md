@@ -413,15 +413,33 @@ Decisão em [ADR-0004](./adr/0004-transcricao-offline-com-whisper.md).
 |---|---|
 | Modelo | OpenAI Whisper (via whisper.cpp) |
 | Arquivo ggml | `small`, embutido no app ([ADR-0008](./adr/0008-modelo-whisper-embutido-no-instalador.md)); um modelo em `modelos/` da pasta de dados tem precedência |
+| Detector de voz | Silero VAD (`ggml-silero-v6.2.0.bin`, embutido ao lado do modelo), pelo VAD do whisper.cpp |
 | Crate Rust | `whisper-rs` |
 | Execução | 100% local/offline |
 | Idioma | pt-BR |
+| Decodificação | Ver [`docs/pesquisa/2026-09-transcricao-a-distancia.md`](./pesquisa/2026-09-transcricao-a-distancia.md): a configuração do app é a que a medição sustentou |
+
+#### O que o microfone ouve
+
+Tudo o que houver na sala durante a Consulta: a fala do Paciente, a uns 2 m do MacBook, e a da Terapeuta, que segura o computador e digita as Notas. Não há separação de locutores nem arranjo físico a mudar ([ADR-0009](./adr/0009-vozes-na-transcricao-sem-separar-locutores.md)). Por isso o pipeline decide o que é fala pelo **conteúdo**, com o detector de voz, e nunca pelo volume: voz baixa e distante não é silêncio.
 
 #### Padrão de comunicação
 
 ```
-[Frontend: captura áudio (Web Audio API)] → invoke("transcrever_audio", amostras f32 no corpo bruto) → [Backend Rust: whisper-rs] → texto transcrito
+[Frontend: captura áudio (Web Audio API), reamostra a 16 kHz]
+  → invoke("iniciar_transcricao")                                        ao ligar: carrega o detector de voz; devolve o id da gravação, ou nulo se falta modelo (instalação avariada)
+  → invoke("audio_bloco", amostras f32 no corpo bruto, cabeçalho x-gravacao)  a cada bloco (~85 ms): o gravador (gravador.rs) decide fala/silêncio e devolve { fechou, trecho } — o id do Trecho, se a Janela fechou com fala
+  → invoke("descarregar_audio", { gravacao })                            ao desligar: fecha a Janela aberta; devolve o id do Trecho que restou, se houve fala
+  → invoke("transcrever_trecho", { trecho })                             a cada Trecho: o Whisper transcreve → texto
 ```
+
+Gravação e Trecho têm ids, e toda chamada leva o seu: religar depressa ou trocar de Consulta nunca mistura o áudio de uma gravação com o de outra, e o que restou de uma gravação encerrada continua recuperável pelo id dela.
+
+O gravador junta os blocos em Trechos de 12 a 28 s: uma pausa de 0,6 s sem fala fecha o Trecho depois dos 12 s mínimos (Trecho curto custa precisão, medido na #14), e 28 s é o teto. Uma Janela em que o detector não ouviu fala fecha sem Trecho, para a Prévia recomeçar, e nada vai ao Whisper — silêncio transcrito é texto inventado. Antes do detector, o áudio quieto recebe ganho automático (pico levado a −6 dBFS, no máximo 30 dB): sem isso o Silero não reconhece voz a −50 dBFS, o nível de uma voz baixa a 2 m. Sem prompt: com o nome do Paciente e uma frase de estilo, a medição saiu pior em todas as condições, e o texto do prompt vazava para a Transcrição.
+
+#### Diagnóstico
+
+A cada gravação o backend acrescenta ao arquivo `diagnostico-transcricao.txt`, na pasta de dados, o processador, o sistema, os modelos em uso e, por trecho, a duração do áudio e o tempo gasto. **Nenhum texto transcrito** entra nele. A terapeuta não o vê; é o que o desenvolvedor lê para saber se a máquina do consultório acompanha a fala.
 
 #### Prévia (só macOS)
 

@@ -10,12 +10,7 @@ import {
   programarFalhaDeCaptura,
   reiniciarCapturaFalsa,
 } from "@/testes/captura-falsa";
-import {
-  chamadasDeComando,
-  programarComando,
-  programarErroDeComando,
-  reiniciarComandosFalsos,
-} from "@/testes/comandos-falsos";
+import { reiniciarComandosFalsos } from "@/testes/comandos-falsos";
 import { consultaAberta, linhaDeConsulta } from "@/testes/fixtures-consulta";
 import {
   dadosPacienteValidos,
@@ -37,16 +32,26 @@ import {
   programarPreviaInexistente,
   reiniciarPreviaFalsa,
 } from "@/testes/previa-falsa";
+import {
+  programarFalhaNaTranscricao,
+  programarFechamento,
+  programarRestoComFala,
+  programarSemModelo,
+  programarTranscricao,
+  reiniciarTranscricaoFalsa,
+  trechosTranscritos,
+} from "@/testes/transcricao-falsa";
 import { PaginaConsulta } from "./consulta";
 
 // Fronteiras do sistema: o banco SQLite atrás do tauri-plugin-sql, os
-// comandos Tauri (fotos, transcrição) e a captura de áudio do navegador
-// (getUserMedia/AudioContext, que o jsdom não tem). O caminho página →
-// consultas/pacientes → drizzle roda de verdade.
+// comandos Tauri (fotos), o gravador e o Whisper do backend, a Prévia e a
+// captura de áudio do navegador (getUserMedia/AudioContext, que o jsdom não
+// tem). O caminho página → consultas/pacientes → drizzle roda de verdade.
 vi.mock("@tauri-apps/plugin-sql", () => import("@/testes/plugin-sql-falso"));
 vi.mock("@tauri-apps/api/core", () => import("@/testes/comandos-falsos"));
 vi.mock("@/lib/captura-audio", () => import("@/testes/captura-falsa"));
 vi.mock("@/db/previa", () => import("@/testes/previa-falsa"));
+vi.mock("@/db/transcricao", () => import("@/testes/transcricao-falsa"));
 
 const AGORA_ISO = "2026-08-08T14:00:00.000Z";
 
@@ -55,6 +60,7 @@ beforeEach(() => {
   reiniciarComandosFalsos();
   reiniciarCapturaFalsa();
   reiniciarPreviaFalsa();
+  reiniciarTranscricaoFalsa();
   // Timers falsos por inteiro: o timer da consulta e o salvamento automático
   // andam com vi.advanceTimersByTime; a carga da página é liberada com um
   // act assíncrono (só microtarefas), então findBy*/waitFor não são usados.
@@ -646,9 +652,17 @@ async function captar(duracaoS: number, amplitude: number) {
   });
 }
 
-/** Liga o microfone com o modelo já disponível no backend. */
+/**
+ * O gravador falso fecha a Janela aberta no próximo bloco — com fala (um
+ * Trecho vai ao Whisper) ou sem. As regras de quando fechar são do backend.
+ */
+async function fecharJanela(comFala: boolean) {
+  programarFechamento(comFala);
+  await captar(0.5, comFala ? 0.25 : 0);
+}
+
+/** Liga o microfone (o gravador falso já tem os modelos). */
 async function ligarMicrofone(terapeuta: ReturnType<typeof userEvent.setup>) {
-  programarComando("modelo_de_transcricao", "ggml-base.bin");
   await terapeuta.click(
     screen.getByRole("button", { name: "Ligar microfone" }),
   );
@@ -688,20 +702,16 @@ test("com o microfone ligado, a fala transcrita entra no Conteúdo e é salva so
     screen.getByRole("button", { name: "Desligar microfone" }),
   ).toBeInTheDocument();
 
-  // 12 s de fala e 1 s de pausa fecham um trecho; o Whisper falso responde.
-  programarComando("transcrever_audio", " Sentiu ansiedade na semana. ");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  // 13 s de fala; o último bloco fecha a Janela e o Whisper falso responde.
+  programarTranscricao(" Sentiu ansiedade na semana. ");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
 
   expect(screen.getByLabelText("Conteúdo")).toHaveValue(
     "Relato até aqui. Sentiu ansiedade na semana.",
   );
-  // O trecho cruzou a fronteira como bytes crus: 13 s × 16 kHz × 4 bytes.
-  const envios = chamadasDeComando.filter(
-    (chamada) => chamada.comando === "transcrever_audio",
-  );
-  expect(envios).toHaveLength(1);
-  expect((envios[0].argumentos as Uint8Array).byteLength).toBe(13 * 16000 * 4);
+  // Um único Trecho foi ao Whisper: 13 s a 16 kHz.
+  expect(trechosTranscritos()).toEqual([13 * 16000]);
 
   // O salvamento automático grava o Conteúdo com a transcrição anexada.
   await passar(600);
@@ -730,11 +740,11 @@ test("a Prévia mostra o que o microfone ouve até a Transcrição da janela ent
   });
   expect(screen.getByText("Sentiu ansiedade na semana")).toBeInTheDocument();
 
-  // 12 s de fala e 1 s de pausa fecham o trecho: a janela 1 fecha e a 2
-  // abre; quando a Transcrição entra no Conteúdo, a Prévia da janela some.
-  programarComando("transcrever_audio", " Sentiu ansiedade na semana. ");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  // 13 s de fala; o último bloco fecha o Trecho: a Janela 1 fecha e a 2
+  // abre; quando a Transcrição entra no Conteúdo, a Prévia da Janela some.
+  programarTranscricao(" Sentiu ansiedade na semana. ");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
   expect(janelasFechadasDaPrevia()).toBe(1);
   expect(screen.getByLabelText("Conteúdo")).toHaveValue(
     "Relato até aqui. Sentiu ansiedade na semana.",
@@ -760,9 +770,9 @@ test("sem Prévia disponível, o microfone funciona só com o Whisper e avisa um
   ).toBeInTheDocument();
 
   // A Transcrição segue chegando pelo Whisper.
-  programarComando("transcrever_audio", "Segue sem Prévia.");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  programarTranscricao("Segue sem Prévia.");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
   expect(screen.getByLabelText("Conteúdo")).toHaveValue("Segue sem Prévia.");
   expect(amostrasRecebidasPelaPrevia()).toBe(0);
 
@@ -790,9 +800,9 @@ test("onde a Prévia não existe (fora do macOS), nada muda — nem aviso", asyn
     screen.queryByText("Prévia indisponível — veja o guia de operação."),
   ).not.toBeInTheDocument();
 
-  programarComando("transcrever_audio", "Segue como sempre.");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  programarTranscricao("Segue como sempre.");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
   expect(screen.getByLabelText("Conteúdo")).toHaveValue("Segue como sempre.");
 });
 
@@ -829,9 +839,9 @@ test("digitar com a Prévia na tela: o Conteúdo recebe o digitado e a Prévia s
   expect(screen.getByText("Sentiu ansiedade")).toBeInTheDocument();
 
   // A Transcrição entra no fim do que foi digitado, como sempre.
-  programarComando("transcrever_audio", "Sentiu ansiedade na semana.");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  programarTranscricao("Sentiu ansiedade na semana.");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
   expect(screen.getByLabelText("Conteúdo")).toHaveValue(
     "Anotação da terapeuta. Sentiu ansiedade na semana.",
   );
@@ -844,15 +854,12 @@ test("silêncio longo fecha a janela da Prévia mesmo sem trecho para o Whisper"
   await renderizarPagina();
   await ligarMicrofone(terapeuta);
 
-  // 12 s sem fala: o acumulador fecha a janela vazia — nada vai ao Whisper,
-  // mas o reconhecedor recomeça, para nunca viver além de um trecho.
-  await captar(12, 0);
+  // 12 s sem fala: o gravador fecha a Janela vazia — nada vai ao Whisper,
+  // mas o reconhecedor recomeça, para nunca viver além de um Trecho.
+  await captar(11.5, 0);
+  await fecharJanela(false);
   expect(janelasFechadasDaPrevia()).toBe(1);
-  expect(
-    chamadasDeComando.filter(
-      (chamada) => chamada.comando === "transcrever_audio",
-    ),
-  ).toHaveLength(0);
+  expect(trechosTranscritos()).toHaveLength(0);
   expect(previaEstaAtiva()).toBe(true);
 
   await act(async () => {
@@ -886,9 +893,9 @@ test("erro na janela aberta derruba só a Prévia; o microfone continua", async 
   ).toBeInTheDocument();
 
   // Sem Prévia, o áudio deixa de ser enviado a ela, mas o Whisper segue.
-  programarComando("transcrever_audio", "Continua transcrevendo.");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  programarTranscricao("Continua transcrevendo.");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
   expect(screen.getByLabelText("Conteúdo")).toHaveValue(
     "Continua transcrevendo.",
   );
@@ -902,9 +909,9 @@ test("erro numa janela já fechada é o fim natural dela e não derruba a Prévi
 
   // A janela 1 fecha com o trecho e a 2 abre; o reconhecedor encerra a 1
   // avisando que não há mais fala nela.
-  programarComando("transcrever_audio", "Primeiro trecho.");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  programarTranscricao("Primeiro trecho.");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
   await act(async () => {
     emitirErroDaPrevia(1, "No speech detected");
     emitirTextoDaPrevia(2, "Já na segunda janela");
@@ -927,11 +934,11 @@ test("desligar o microfone mantém a Prévia congelada até a última Transcriç
   await act(async () => {
     emitirTextoDaPrevia(1, "Última frase");
   });
-  // O Whisper falso só responde depois de liberado: enquanto isso, a Prévia
-  // continua na tela, congelada.
+  // Ao desligar resta fala; o Whisper falso só responde depois de liberado
+  // e, enquanto isso, a Prévia continua na tela, congelada.
+  programarRestoComFala();
   let responder: (texto: string) => void = () => {};
-  programarComando(
-    "transcrever_audio",
+  programarTranscricao(
     new Promise<string>((resolve) => {
       responder = resolve;
     }),
@@ -961,7 +968,8 @@ test("Finalizar Consulta com Prévia na tela: ela some quando a Transcrição pe
   await act(async () => {
     emitirTextoDaPrevia(1, "Frase final");
   });
-  programarComando("transcrever_audio", "Frase final.");
+  programarRestoComFala();
+  programarTranscricao("Frase final.");
   await terapeuta.click(
     screen.getByRole("button", { name: "Finalizar Consulta" }),
   );
@@ -982,7 +990,8 @@ test("desligar o microfone transcreve a fala que ainda não fechou trecho", asyn
   await captar(1, 0.25);
   expect(screen.getByLabelText("Conteúdo")).toHaveValue("");
 
-  programarComando("transcrever_audio", "Última frase.");
+  programarRestoComFala();
+  programarTranscricao("Última frase.");
   await terapeuta.click(
     screen.getByRole("button", { name: "Desligar microfone" }),
   );
@@ -1001,9 +1010,10 @@ test("Finalizar Consulta com o microfone ligado ainda transcreve o que restou", 
   await renderizarPagina();
   await ligarMicrofone(terapeuta);
 
-  // 1 s de fala que ainda não fechou trecho quando a Consulta é finalizada.
+  // 1 s de fala que ainda não fechou Trecho quando a Consulta é finalizada.
   await captar(1, 0.25);
-  programarComando("transcrever_audio", "Frase final.");
+  programarRestoComFala();
+  programarTranscricao("Frase final.");
   await terapeuta.click(
     screen.getByRole("button", { name: "Finalizar Consulta" }),
   );
@@ -1024,7 +1034,7 @@ test("sem modelo no app, ligar o microfone explica o que falta", async () => {
   carregarConsulta();
   await renderizarPagina();
 
-  programarComando("modelo_de_transcricao", null);
+  programarSemModelo();
   await terapeuta.click(
     screen.getByRole("button", { name: "Ligar microfone" }),
   );
@@ -1046,7 +1056,6 @@ test("sem acesso ao microfone, o aviso aparece no lugar da gravação", async ()
   carregarConsulta();
   await renderizarPagina();
 
-  programarComando("modelo_de_transcricao", "ggml-base.bin");
   programarFalhaDeCaptura(new Error("Permissão negada"));
   await terapeuta.click(
     screen.getByRole("button", { name: "Ligar microfone" }),
@@ -1067,9 +1076,9 @@ test("falha na transcrição desliga o microfone e avisa", async () => {
   await renderizarPagina();
   await ligarMicrofone(terapeuta);
 
-  programarErroDeComando("transcrever_audio", "sem memória");
-  await captar(12, 0.25);
-  await captar(1, 0);
+  programarFalhaNaTranscricao("sem memória");
+  await captar(12.5, 0.25);
+  await fecharJanela(true);
 
   expect(capturaEstaAtiva()).toBe(false);
   expect(

@@ -4,8 +4,10 @@ use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub mod cpf;
+pub mod diagnostico;
 pub mod endereco;
 pub mod fotos;
+pub mod gravador;
 pub mod previa;
 pub mod servidor;
 pub mod transcricao;
@@ -121,39 +123,93 @@ fn endereco_auto_cadastro(
     endereco::endereco_auto_cadastro(&estado)
 }
 
-/// Nome do modelo Whisper disponível (ou nulo) — o frontend consulta antes de
-/// ligar o microfone, para avisar quando não há modelo (instalação avariada).
-#[tauri::command]
-fn modelo_de_transcricao(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    Ok(
-        transcricao::localizar_modelo_entre(&diretorios_de_modelos(&app)?).and_then(|caminho| {
-            caminho
-                .file_name()
-                .map(|nome| nome.to_string_lossy().into_owned())
-        }),
-    )
+/// Onde procurar o detector de voz (Silero VAD em ggml, issue #34): nos
+/// mesmos diretórios do modelo Whisper, na mesma precedência.
+fn localizar_vad(diretorios: &[PathBuf]) -> Option<PathBuf> {
+    diretorios
+        .iter()
+        .map(|diretorio| diretorio.join(gravador::ARQUIVO_VAD))
+        .find(|caminho| caminho.is_file())
 }
 
-/// Recebe um trecho de áudio (f32 LE, 16 kHz mono) como corpo bruto do invoke
-/// e devolve o texto transcrito. `async` no atributo: a inferência leva
-/// segundos e não pode rodar na thread principal — e o corpo bruto
-/// (`Request<'_>`) exige a assinatura síncrona.
+/// Começa uma gravação: confere os modelos e carrega o detector de voz.
+/// Devolve o id da gravação, ou nada quando falta um modelo — instalação
+/// avariada, que o frontend avisa (ADR-0008).
 #[tauri::command(async)]
-fn transcrever_audio(
+fn iniciar_transcricao(
+    app: tauri::AppHandle,
+    gravador: tauri::State<'_, gravador::Gravador>,
+) -> Result<Option<gravador::IdGravacao>, String> {
+    let diretorios = diretorios_de_modelos(&app)?;
+    let (Some(modelo), Some(vad)) = (
+        transcricao::localizar_modelo_entre(&diretorios),
+        localizar_vad(&diretorios),
+    ) else {
+        return Ok(None);
+    };
+    let id = gravador.iniciar(&vad)?;
+    if let Ok(pasta) = diretorio_de_dados(&app) {
+        diagnostico::registrar_inicio(&pasta, &modelo, &vad);
+    }
+    Ok(Some(id))
+}
+
+/// O cabeçalho que leva o id da gravação junto do corpo bruto de `audio_bloco`
+/// (o corpo é só áudio, sem espaço para argumentos).
+const CABECALHO_GRAVACAO: &str = "x-gravacao";
+
+/// Recebe um bloco captado (f32 LE, 16 kHz mono) como corpo bruto do invoke,
+/// com o id da gravação no cabeçalho, e diz se ele fechou a Janela — e o
+/// Trecho que foi para a fila. `async` no atributo: o detector de voz custa
+/// alguns milissegundos por bloco, doze vezes por segundo — fora da thread
+/// principal. O frontend manda um bloco por vez.
+#[tauri::command(async)]
+fn audio_bloco(
+    gravador: tauri::State<'_, gravador::Gravador>,
+    requisicao: tauri::ipc::Request<'_>,
+) -> Result<gravador::Corte, String> {
+    let gravacao = requisicao
+        .headers()
+        .get(CABECALHO_GRAVACAO)
+        .and_then(|valor| valor.to_str().ok())
+        .and_then(|valor| valor.parse::<gravador::IdGravacao>().ok())
+        .ok_or_else(|| format!("Esperava o id da gravação no cabeçalho {CABECALHO_GRAVACAO}"))?;
+    gravador.registrar(gravacao, &transcricao::amostras_da_requisicao(&requisicao)?)
+}
+
+/// Desliga o microfone: encerra a gravação e devolve o Trecho que restou, se
+/// houve fala nele (já na fila, à espera de `transcrever_trecho`).
+#[tauri::command(async)]
+fn descarregar_audio(
+    gravador: tauri::State<'_, gravador::Gravador>,
+    gravacao: gravador::IdGravacao,
+) -> Result<Option<gravador::IdTrecho>, String> {
+    gravador.descarregar(gravacao)
+}
+
+/// Transcreve o Trecho `trecho` e devolve o texto. `async` no atributo: a
+/// inferência leva segundos e não pode rodar na thread principal.
+#[tauri::command(async)]
+fn transcrever_trecho(
     app: tauri::AppHandle,
     transcritor: tauri::State<'_, transcricao::Transcritor>,
-    requisicao: tauri::ipc::Request<'_>,
+    gravador: tauri::State<'_, gravador::Gravador>,
+    trecho: gravador::IdTrecho,
 ) -> Result<String, String> {
-    let amostras = transcricao::amostras_da_requisicao(&requisicao)?;
-    if amostras.is_empty() {
-        return Ok(String::new());
-    }
+    let Some(pendente) = gravador.retirar_trecho(trecho)? else {
+        return Err(format!("Trecho {trecho} desconhecido"));
+    };
     let candidatos = transcricao::candidatos_a_modelo(&diretorios_de_modelos(&app)?);
     if candidatos.is_empty() {
         return Err(
             "Nenhum modelo de transcrição: nem embutido no app, nem em modelos/ (ADR-0008)".into(),
         );
     }
+    let opcoes = transcricao::Opcoes::do_app();
+    let duracao_do_audio = std::time::Duration::from_secs_f32(
+        pendente.amostras.len() as f32 / transcricao::TAXA_AMOSTRAGEM as f32,
+    );
+    let amostras = transcricao::com_duracao_minima(pendente.amostras);
     // Um modelo que não carrega (truncado, por exemplo) não pode esconder o
     // embutido: o próximo candidato assume. O Transcritor lembra os que
     // falharam, então a reserva não paga a carga avariada a cada trecho.
@@ -161,10 +217,12 @@ fn transcrever_audio(
     for caminho in &candidatos {
         match transcritor.contexto(caminho) {
             Ok(contexto) => {
-                return transcricao::transcrever(
-                    &contexto,
-                    &transcricao::com_duracao_minima(amostras),
-                );
+                let inicio = std::time::Instant::now();
+                let texto = transcricao::transcrever(&contexto, &amostras, &opcoes)?;
+                if let Ok(pasta) = diretorio_de_dados(&app) {
+                    diagnostico::registrar_trecho(&pasta, duracao_do_audio, inicio.elapsed(), caminho);
+                }
+                return Ok(texto);
             }
             Err(erro) => ultimo_erro = erro,
         }
@@ -219,14 +277,17 @@ pub fn run() {
         )
         .manage(servidor::EstadoDoServidor::default())
         .manage(transcricao::Transcritor::default())
+        .manage(gravador::Gravador::default())
         .manage(previa::Previa::default())
         .invoke_handler(tauri::generate_handler![
             salvar_foto_paciente,
             carregar_foto_paciente,
             remover_foto_paciente,
             endereco_auto_cadastro,
-            modelo_de_transcricao,
-            transcrever_audio,
+            iniciar_transcricao,
+            audio_bloco,
+            descarregar_audio,
+            transcrever_trecho,
             previa_disponibilidade,
             previa_iniciar,
             previa_audio,
@@ -234,6 +295,10 @@ pub fn run() {
             previa_parar
         ])
         .setup(|app| {
+            // Os logs internos do whisper.cpp e do ggml ficam de fora do
+            // stderr: o detector de voz imprimiria quatro linhas por bloco
+            // de 85 ms. O que importa (modelo em uso) o app mesmo registra.
+            whisper_rs::install_logging_hooks();
             // O servidor do Auto-cadastro sobe junto com o app (spec 5.1);
             // uma falha aqui não impede o modo desktop de funcionar.
             if let Err(erro) = servidor::iniciar(app.handle()) {

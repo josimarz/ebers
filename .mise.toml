@@ -22,10 +22,10 @@ description = "Gera migração SQL a partir do schema Drizzle (src/db/schema.ts)
 run = "npx drizzle-kit generate"
 
 [tasks.modelo]
-description = "Baixa o modelo Whisper embutido no app (ggml-small.bin) para src-tauri/recursos/modelos/"
-# Uma vez só: com o arquivo íntegro no lugar, a task apenas confere o SHA-256
-# (~2 s) e não toca em nada. O modelo fica fora do git e entra no bundle pelo
-# `bundle.resources` do tauri.conf.json (ADR-0008).
+description = "Baixa os modelos embutidos no app (Whisper ggml-small.bin e Silero VAD) para src-tauri/recursos/modelos/"
+# Uma vez só: com os arquivos íntegros no lugar, a task apenas confere o
+# SHA-256 (~2 s) e não toca em nada. Os modelos ficam fora do git e entram no
+# bundle pelo `bundle.resources` do tauri.conf.json (ADR-0008, issue #34).
 run = "scripts/baixar-modelo.sh"
 
 [tasks."build:macos"]

@@ -37,6 +37,8 @@ local-ip-address = "0.6.13"
 rusqlite = { version = "0.32", features = ["bundled"] }
 # Transcrição de voz offline da Consulta (spec 5.3, ADR-0004).
 whisper-rs = "0.16"
+# Data e hora legíveis no diagnóstico da transcrição (issue #34).
+chrono = "0.4"
 
 # No Apple Silicon o Whisper roda na GPU via Metal — dá folga para os modelos
 # maiores (base/small) sem travar a máquina durante a Consulta. Nos Macs Intel
@@ -57,6 +59,8 @@ objc2-avf-audio = { version = "0.3", features = ["AVAudioBuffer", "AVAudioFormat
 
 [dev-dependencies]
 tempfile = "3"
+# Leitura dos WAVs do corpus de medição (examples/medir.rs, issue #34).
+hound = "3.5"
 # `oneshot` para exercitar as rotas Axum nos testes.
 tower = { version = "0.5", features = ["util"] }
 

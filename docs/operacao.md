@@ -84,8 +84,8 @@ Dentro dela:
 - `ebers.db` — o banco com todos os cadastros, consultas e anotações;
 - `fotos/` — as fotos de perfil dos pacientes.
 
-Qualquer outra pasta que apareça ali (por exemplo `modelos/`) não precisa ir
-no backup.
+Qualquer outra pasta ou arquivo que apareça ali (por exemplo `modelos/` ou
+`diagnostico-transcricao.txt`) não precisa ir no backup.
 
 ### Como fazer o backup
 

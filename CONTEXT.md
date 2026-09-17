@@ -55,12 +55,19 @@ As anotações da Terapeuta numa Consulta (texto rico).
 _Evitar_: observações, prontuário
 
 **Transcrição**:
-O texto que o microfone insere no Conteúdo. Definitiva ao entrar: só a Terapeuta a altera depois, editando o Conteúdo.
+O texto do que o microfone ouviu durante a Consulta, inserido no Conteúdo: a fala do Paciente e tudo o mais que houver na sala, inclusive a voz da Terapeuta, sem distinguir quem falou. Definitiva ao entrar: só a Terapeuta a altera depois, editando o Conteúdo.
 _Evitar_: texto confirmado, texto final, trecho
 
 **Prévia**:
 O que o microfone está ouvindo agora, em texto provisório: aparece em segundos, pode mudar e nunca é salva; some quando a Transcrição correspondente entra no Conteúdo.
 _Evitar_: texto provisório, parcial, resultado intermediário, interim
+
+**Trecho**:
+O pedaço de áudio (12 a 28 s) que o microfone fecha numa pausa da fala e manda transcrever de uma vez; cada Trecho vira uma Transcrição.
+_Evitar_: chunk, segmento, bloco (o bloco é o pedaço de 85 ms captado)
+
+**Janela**:
+O período da Prévia que corresponde a um Trecho: o reconhecedor recomeça a cada Janela, e a Prévia de uma Janela some quando a Transcrição do Trecho dela entra no Conteúdo.
 
 **Valor da consulta**:
 O preço atual acordado entre Terapeuta e Paciente; vive no cadastro do Paciente.

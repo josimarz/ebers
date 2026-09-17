@@ -10,7 +10,13 @@ import {
   iniciarPrevia,
   pararPrevia,
 } from "@/db/previa";
-import { modeloDeTranscricao, transcreverAudio } from "@/db/transcricao";
+import {
+  descarregarAudio,
+  enviarBloco,
+  type Id,
+  iniciarTranscricao,
+  transcreverTrecho,
+} from "@/db/transcricao";
 import {
   abrirProximaJanela,
   descartarJanela,
@@ -20,10 +26,7 @@ import {
   registrarTextoDaJanela,
   textoDaPrevia,
 } from "@/dominio/previa";
-import {
-  AcumuladorDeAudio,
-  reamostrarParaWhisper,
-} from "@/dominio/transcricao";
+import { reamostrarParaWhisper } from "@/dominio/transcricao";
 import {
   type CapturaDeAudio,
   criarCapturaDoMicrofone,
@@ -38,10 +41,16 @@ const AVISO_PREVIA_INDISPONIVEL =
 
 type Fase = "desligado" | "ligando" | "gravando";
 
-/** Uma gravação em andamento: captura ligada, acumulador, fila e Prévia. */
+/** Uma gravação em andamento: id no backend, captura ligada, filas e Prévia. */
 interface Gravacao {
+  id: Id;
   captura: CapturaDeAudio;
-  acumulador: AcumuladorDeAudio;
+  /**
+   * Blocos em série, na ordem captada: cada um vai à Prévia e ao backend,
+   * que decide quando a Janela fecha (gravador.rs). Desligar entra no fim da
+   * série, para o backend descarregar depois do último bloco.
+   */
+  blocos: Promise<void>;
   /** Transcrições em série, na ordem da fala. */
   fila: Promise<void>;
   /** Nula quando a Prévia não está disponível nesta gravação. */
@@ -57,11 +66,11 @@ interface PropsBotaoMicrofone {
 
 /**
  * Liga/desliga a transcrição de voz da Consulta (spec 2.3): com o microfone
- * ligado, os blocos captados viram trechos (AcumuladorDeAudio), cada trecho
- * vai ao Whisper do backend e a Transcrição volta por aoTranscrever. Os
- * mesmos blocos alimentam a Prévia (ADR-0007), que volta por aoMudarPrevia.
- * Desligar ainda transcreve o que ficou pendente — a última frase não se
- * perde.
+ * ligado, cada bloco captado vai ao backend, que junta os blocos em Trechos
+ * e decide o que é fala; a cada Janela fechada com fala, uma Transcrição
+ * volta por aoTranscrever. Os mesmos blocos alimentam a Prévia (ADR-0007),
+ * que volta por aoMudarPrevia. Desligar ainda transcreve o que ficou
+ * pendente — a última frase não se perde.
  */
 export function BotaoMicrofone({
   aoTranscrever,
@@ -130,8 +139,8 @@ export function BotaoMicrofone({
         exibirPrevia(alvo);
         return;
       }
-      // Erro numa janela já fechada é o fim natural dela (o reconhecedor
-      // avisa "sem fala" ao encerrar); só a janela aberta derruba a Prévia.
+      // Erro numa Janela já fechada é o fim natural dela (o reconhecedor
+      // avisa "sem fala" ao encerrar); só a Janela aberta derruba a Prévia.
       if (gravacao.current === alvo && evento.janela === janelaAberta(previa)) {
         encerrarPrevia(alvo);
       }
@@ -140,7 +149,7 @@ export function BotaoMicrofone({
   );
 
   /**
-   * Fecha a janela aberta da Prévia e abre a seguinte; devolve o número da
+   * Fecha a Janela aberta da Prévia e abre a seguinte; devolve o número da
    * fechada, para descartar a parte congelada dela depois — nulo sem Prévia.
    */
   const fecharJanela = useCallback(
@@ -156,7 +165,7 @@ export function BotaoMicrofone({
     [encerrarPrevia],
   );
 
-  /** A Transcrição da janela entrou (ou a janela ficou vazia): a Prévia dela some. */
+  /** A Transcrição da Janela entrou (ou a Janela ficou vazia): a Prévia dela some. */
   const descartar = useCallback(
     (alvo: Gravacao, janela: number | null) => {
       if (janela === null || alvo.previa === null) return;
@@ -166,24 +175,31 @@ export function BotaoMicrofone({
     [exibirPrevia],
   );
 
+  /** O backend falhou (gravar ou transcrever): microfone desligado, com aviso. */
+  const falhar = useCallback(
+    (alvo: Gravacao) => {
+      if (gravacao.current === alvo) {
+        alvo.captura.parar();
+        gravacao.current = null;
+      }
+      soltarPrevia(alvo);
+      setFase("desligado");
+      setAviso(AVISO_TRANSCRICAO_FALHOU);
+    },
+    [soltarPrevia],
+  );
+
+  /** Pede a Transcrição do Trecho; quando ela entra, a Prévia da Janela some. */
   const transcrever = useCallback(
-    (alvo: Gravacao, trecho: Float32Array, janela: number | null) => {
+    (alvo: Gravacao, trecho: Id, janela: number | null) => {
       alvo.fila = alvo.fila
         .then(async () => {
-          aoTranscreverAtual.current(await transcreverAudio(trecho));
+          aoTranscreverAtual.current(await transcreverTrecho(trecho));
           descartar(alvo, janela);
         })
-        .catch(() => {
-          if (gravacao.current === alvo) {
-            alvo.captura.parar();
-            gravacao.current = null;
-          }
-          soltarPrevia(alvo);
-          setFase("desligado");
-          setAviso(AVISO_TRANSCRICAO_FALHOU);
-        });
+        .catch(() => falhar(alvo));
     },
-    [descartar, soltarPrevia],
+    [descartar, falhar],
   );
 
   const desligar = useCallback(() => {
@@ -191,18 +207,24 @@ export function BotaoMicrofone({
     if (atual === null) return;
     gravacao.current = null;
     atual.captura.parar();
-    const resto = atual.acumulador.descarregar();
-    if (resto === null) {
-      soltarPrevia(atual);
-    } else {
-      // O reconhecedor para, mas a Prévia da última janela fica congelada
-      // até a Transcrição dela entrar.
-      const janela = atual.previa === null ? null : janelaAberta(atual.previa);
-      if (atual.previa !== null) pararPrevia().catch(() => {});
-      transcrever(atual, resto, janela);
-    }
     setFase("desligado");
-  }, [transcrever, soltarPrevia]);
+    // Depois do último bloco entregue, o backend descarrega o que restou.
+    atual.blocos = atual.blocos
+      .then(async () => {
+        const trecho = await descarregarAudio(atual.id);
+        if (trecho === null) {
+          soltarPrevia(atual);
+          return;
+        }
+        // O reconhecedor para, mas a Prévia da última Janela fica congelada
+        // até a Transcrição dela entrar.
+        const janela =
+          atual.previa === null ? null : janelaAberta(atual.previa);
+        if (atual.previa !== null) pararPrevia().catch(() => {});
+        transcrever(atual, trecho, janela);
+      })
+      .catch(() => falhar(atual));
+  }, [transcrever, soltarPrevia, falhar]);
 
   // Desmonte com o microfone ligado — ex.: "Finalizar Consulta", que tira o
   // microfone da página (spec 2.3) — vale um desligar: solta o hardware e
@@ -212,23 +234,28 @@ export function BotaoMicrofone({
   function aoBloco(bloco: Float32Array) {
     const atual = gravacao.current;
     if (atual === null) return;
-    if (atual.previa !== null) {
-      enviarAudioDaPrevia(
-        reamostrarParaWhisper(bloco, atual.captura.taxa),
-      ).catch(() => {
-        if (gravacao.current === atual) encerrarPrevia(atual);
-      });
-    }
-    const corte = atual.acumulador.registrar(bloco);
-    if (corte === null) return;
-    // Toda janela fechada — com fala ou sem — recomeça o reconhecedor: um
-    // request nunca vive além de um trecho.
-    const janela = fecharJanela(atual);
-    if (corte.trecho !== null) {
-      transcrever(atual, corte.trecho, janela);
-    } else {
-      descartar(atual, janela);
-    }
+    const amostras = reamostrarParaWhisper(bloco, atual.captura.taxa);
+    // Prévia e backend recebem os blocos na mesma ordem, na mesma série: o
+    // bloco que fecha a Janela chega à Prévia antes de a Janela dela fechar.
+    atual.blocos = atual.blocos
+      .then(async () => {
+        if (atual.previa !== null) {
+          await enviarAudioDaPrevia(amostras).catch(() => {
+            if (gravacao.current === atual) encerrarPrevia(atual);
+          });
+        }
+        const corte = await enviarBloco(atual.id, amostras);
+        if (!corte.fechou) return;
+        // Toda Janela fechada — com fala ou sem — recomeça o reconhecedor:
+        // um request nunca vive além de um Trecho.
+        const janela = fecharJanela(atual);
+        if (corte.trecho !== null) {
+          transcrever(atual, corte.trecho, janela);
+        } else {
+          descartar(atual, janela);
+        }
+      })
+      .catch(() => falhar(atual));
   }
 
   async function ligarPrevia(alvo: Gravacao) {
@@ -256,15 +283,17 @@ export function BotaoMicrofone({
     setAvisoDePrevia(null);
     setFase("ligando");
     try {
-      if ((await modeloDeTranscricao()) === null) {
+      const id = await iniciarTranscricao();
+      if (id === null) {
         setFase("desligado");
         setAviso(AVISO_SEM_MODELO);
         return;
       }
       const captura = await criarCapturaDoMicrofone(aoBloco);
       const nova: Gravacao = {
+        id,
         captura,
-        acumulador: new AcumuladorDeAudio(captura.taxa),
+        blocos: Promise.resolve(),
         fila: Promise.resolve(),
         previa: null,
       };
